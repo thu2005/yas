@@ -129,6 +129,20 @@ class StockServiceTest {
         verify(productService, never()).updateProductQuantity(any());
     }
 
+    @Test
+    void updateProductQuantityInStock_whenQuantityNull_shouldUseZero() {
+        Stock stock = stock(1L, 100L, 1L, 10L);
+        List<StockQuantityVm> updateList = List.of(new StockQuantityVm(1L, null, "add"));
+        when(stockRepository.findAllById(List.of(1L))).thenReturn(List.of(stock));
+
+        stockService.updateProductQuantityInStock(new StockQuantityUpdateVm(updateList));
+
+        assertThat(stock.getQuantity()).isEqualTo(10L);
+        verify(stockRepository).saveAll(List.of(stock));
+        verify(stockHistoryService).createStockHistories(List.of(stock), updateList);
+        verify(productService).updateProductQuantity(List.of(new ProductQuantityPostVm(100L, 10L)));
+    }
+
     private static Warehouse warehouse(Long id) {
         Warehouse warehouse = new Warehouse();
         warehouse.setId(id);
