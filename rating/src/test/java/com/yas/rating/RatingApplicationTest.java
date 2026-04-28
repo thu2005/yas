@@ -19,3 +19,4 @@ class RatingApplicationTest {
         assertDoesNotThrow(() -> RatingApplication.main(new String[]{}));
     }
 
+}
