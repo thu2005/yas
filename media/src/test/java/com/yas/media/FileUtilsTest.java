@@ -30,7 +30,7 @@ class FileUtilsTest {
         // Giải quyết triệt để lỗi NullPointerException tại FileTypeValidator.java:28
         ConstraintValidatorContext context = mock(ConstraintValidatorContext.class, RETURNS_DEEP_STUBS);
         
-        // --- BẮT ĐẦU PHỦ CÁC NHÁNH ---
+        // BẮT ĐẦU PHỦ CÁC NHÁNH
 
         // Case: File null
         try { validator.isValid(null, context); } catch (Exception ignored) {}
