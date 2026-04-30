@@ -114,6 +114,7 @@ class OrderServiceTest {
         assertThat(result.orderItemVms()).hasSize(1);
     }
 
+
     @Test
     void getOrderWithItemsById_whenOrderNotFound_shouldThrow() {
         when(orderRepository.findById(999L)).thenReturn(Optional.empty());
