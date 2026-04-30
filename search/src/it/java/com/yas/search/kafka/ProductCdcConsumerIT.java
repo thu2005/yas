@@ -37,7 +37,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 @Import(SearchIntegrationTestConfiguration.class)
 @PropertySource("classpath:application.properties")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-public class ProductCdcConsumerIT extends CdcConsumerTest<ProductMsgKey, ProductCdcMessage> {
+public class ProductCdcConsumerTest extends CdcConsumerTest<ProductMsgKey, ProductCdcMessage> {
 
     public static final String STOREFRONT_PRODUCTS_ES_PATH = "/storefront/products-es/{id}";
 
@@ -53,7 +53,7 @@ public class ProductCdcConsumerIT extends CdcConsumerTest<ProductMsgKey, Product
     @MockitoSpyBean
     private ProductSyncDataService productSyncDataService;
 
-    public ProductCdcConsumerIT() {
+    public ProductCdcConsumerTest() {
         super(ProductMsgKey.class, ProductCdcMessage.class, "dbproduct.public.product");
     }
 

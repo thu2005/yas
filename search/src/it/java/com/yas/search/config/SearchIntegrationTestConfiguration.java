@@ -1,7 +1,6 @@
 package com.yas.search.config;
 
 import dasniko.testcontainers.keycloak.KeycloakContainer;
-import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
@@ -47,11 +46,9 @@ public class SearchIntegrationTestConfiguration {
 
     @Bean(destroyMethod = "stop")
     public KeycloakContainer keycloakContainer() {
-        return new KeycloakContainer("quay.io/keycloak/keycloak:26.0.8")
-            // Limit JVM heap to avoid OOM when running alongside Kafka + Elasticsearch
-            .withEnv("JAVA_OPTS_APPEND", "-Xms128m -Xmx384m")
+        return new KeycloakContainer()
             .withRealmImportFiles("/test-realm.json")
-            .withStartupTimeout(Duration.ofMinutes(5));
+            .withReuse(true);
     }
 
     @Bean
