@@ -19,6 +19,9 @@ public class ElasticTestContainer extends ElasticsearchContainer {
         this.withEnv("xpack.security.enabled", "false");
         this.withEnv("xpack.security.transport.ssl.enabled", "false");
         this.withEnv("xpack.security.http.ssl.enabled", "false");
+        this.withEnv("discovery.type", "single-node");
+        this.withEnv("ES_JAVA_OPTS", "-Xms512m -Xmx512m");
+        this.withStartupTimeout(Duration.ofMinutes(3));
         this.setWaitStrategy(new HttpWaitStrategy()
             .forPort(9200)
             .forStatusCodeMatching(response -> response == 200)
