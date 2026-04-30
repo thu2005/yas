@@ -51,6 +51,7 @@ class ProductSyncDataServiceTest {
 
     }
 
+
     private void mockProductThumbnailVmsByUri() {
 
         final URI url = UriComponentsBuilder.fromUriString(PRODUCT_URL)
