@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -37,7 +38,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 @Import(SearchIntegrationTestConfiguration.class)
 @PropertySource("classpath:application.properties")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-public class ProductCdcConsumerIT extends CdcConsumerTest<ProductMsgKey, ProductCdcMessage> {
+@EnabledIfSystemProperty(named = "runIT", matches = "true")
+public class ProductCdcConsumerTest extends CdcConsumerTest<ProductMsgKey, ProductCdcMessage> {
 
     public static final String STOREFRONT_PRODUCTS_ES_PATH = "/storefront/products-es/{id}";
 
@@ -53,7 +55,7 @@ public class ProductCdcConsumerIT extends CdcConsumerTest<ProductMsgKey, Product
     @MockitoSpyBean
     private ProductSyncDataService productSyncDataService;
 
-    public ProductCdcConsumerIT() {
+    public ProductCdcConsumerTest() {
         super(ProductMsgKey.class, ProductCdcMessage.class, "dbproduct.public.product");
     }
 
