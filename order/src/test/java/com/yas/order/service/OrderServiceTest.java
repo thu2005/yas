@@ -267,6 +267,17 @@ class OrderServiceTest {
     }
 
     @Test
+    void updateOrderPaymentStatus_whenOrderMissing_shouldThrow() {
+        when(orderRepository.findById(anyLong())).thenReturn(Optional.empty());
+
+        assertThrows(NotFoundException.class, () -> orderService.updateOrderPaymentStatus(PaymentOrderStatusVm.builder()
+                .orderId(73L)
+                .paymentId(999L)
+                .paymentStatus(PaymentStatus.PENDING.name())
+                .build()));
+    }
+
+    @Test
     void rejectAndAcceptOrder_whenOrderExists_shouldUpdateStatus() {
         Order order = createOrder(72L);
         when(orderRepository.findById(72L)).thenReturn(Optional.of(order));
