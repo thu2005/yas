@@ -134,4 +134,61 @@ class ProductControllerTest {
         org.junit.jupiter.api.Assertions.assertEquals(com.yas.search.constant.enums.SortType.DEFAULT, actual.sortType());
     }
 
+    @Test
+    void testFindProductAdvance_whenAllOptionalParamsProvided_thenMapToCriteriaDto() throws Exception {
+        ProductListGetVm mockResponse = new ProductListGetVm(
+            List.of(), 0, 10, 0, 0, true, Map.of()
+        );
+
+        when(productService.findProductAdvance(any(ProductCriteriaDto.class))).thenReturn(mockResponse);
+
+        mockMvc.perform(get("/storefront/catalog-search")
+                .param("keyword", "laptop")
+                .param("page", "1")
+                .param("size", "20")
+                .param("brand", "Dell")
+                .param("category", "Electronics")
+                .param("attribute", "RAM:16GB")
+                .param("minPrice", "500.0")
+                .param("maxPrice", "2000.0")
+                .param("sortType", "PRICE_ASC")
+                .contentType(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.products").isArray())
+            .andExpect(jsonPath("$.isLast").value(true));
+
+        ArgumentCaptor<ProductCriteriaDto> captor = ArgumentCaptor.forClass(ProductCriteriaDto.class);
+        verify(productService).findProductAdvance(captor.capture());
+        ProductCriteriaDto actual = captor.getValue();
+        org.junit.jupiter.api.Assertions.assertEquals("laptop", actual.keyword());
+        org.junit.jupiter.api.Assertions.assertEquals(1, actual.page());
+        org.junit.jupiter.api.Assertions.assertEquals(20, actual.size());
+        org.junit.jupiter.api.Assertions.assertEquals("Dell", actual.brand());
+        org.junit.jupiter.api.Assertions.assertEquals("Electronics", actual.category());
+        org.junit.jupiter.api.Assertions.assertEquals("RAM:16GB", actual.attribute());
+        org.junit.jupiter.api.Assertions.assertEquals(500.0, actual.minPrice());
+        org.junit.jupiter.api.Assertions.assertEquals(2000.0, actual.maxPrice());
+        org.junit.jupiter.api.Assertions.assertEquals(com.yas.search.constant.enums.SortType.PRICE_ASC, actual.sortType());
+    }
+
+    @Test
+    void testFindProductAdvance_withPriceDescSort_thenMapCorrectly() throws Exception {
+        ProductListGetVm mockResponse = new ProductListGetVm(
+            List.of(), 0, 10, 0, 0, true, Map.of()
+        );
+
+        when(productService.findProductAdvance(any(ProductCriteriaDto.class))).thenReturn(mockResponse);
+
+        mockMvc.perform(get("/storefront/catalog-search")
+                .param("keyword", "phone")
+                .param("sortType", "PRICE_DESC")
+                .contentType(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk());
+
+        ArgumentCaptor<ProductCriteriaDto> captor = ArgumentCaptor.forClass(ProductCriteriaDto.class);
+        verify(productService).findProductAdvance(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals(
+            com.yas.search.constant.enums.SortType.PRICE_DESC, captor.getValue().sortType());
+    }
+
 }

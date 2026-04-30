@@ -144,6 +144,77 @@ class ProductServiceTest {
     }
 
     @Test
+    void testFindProductAdvance_whenFiltersAreBlank_ReturnProductListGetVm() {
+        SearchHits<Product> searchHits = getSearchHits();
+
+        when(elasticsearchOperations.search(any(NativeQuery.class), eq(Product.class))).thenReturn(searchHits);
+
+        // All filter fields null/blank - exercises extractedTermsFilter early return path
+        ProductCriteriaDto criteriaDto = new ProductCriteriaDto(
+            "laptop", 0, 10, null, null, null, null, null, SortType.DEFAULT);
+        ProductListGetVm result = productService.findProductAdvance(criteriaDto);
+
+        assertNotNull(result);
+        assertEquals(1, result.products().size());
+    }
+
+    @Test
+    void testFindProductAdvance_whenFiltersAreEmpty_ReturnProductListGetVm() {
+        SearchHits<Product> searchHits = getSearchHits();
+
+        when(elasticsearchOperations.search(any(NativeQuery.class), eq(Product.class))).thenReturn(searchHits);
+
+        // Empty string filters - also hits blank check early return
+        ProductCriteriaDto criteriaDto = new ProductCriteriaDto(
+            "phone", 0, 5, "", "", "", null, null, SortType.PRICE_ASC);
+        ProductListGetVm result = productService.findProductAdvance(criteriaDto);
+
+        assertNotNull(result);
+    }
+
+    @Test
+    void testFindProductAdvance_whenOnlyMinPriceSet_ReturnProductListGetVm() {
+        SearchHits<Product> searchHits = getSearchHits();
+
+        when(elasticsearchOperations.search(any(NativeQuery.class), eq(Product.class))).thenReturn(searchHits);
+
+        // Only minPrice set, maxPrice null
+        ProductCriteriaDto criteriaDto = new ProductCriteriaDto(
+            "test", 0, 10, null, null, null, 50.0, null, SortType.DEFAULT);
+        ProductListGetVm result = productService.findProductAdvance(criteriaDto);
+
+        assertNotNull(result);
+    }
+
+    @Test
+    void testFindProductAdvance_whenOnlyMaxPriceSet_ReturnProductListGetVm() {
+        SearchHits<Product> searchHits = getSearchHits();
+
+        when(elasticsearchOperations.search(any(NativeQuery.class), eq(Product.class))).thenReturn(searchHits);
+
+        // Only maxPrice set, minPrice null
+        ProductCriteriaDto criteriaDto = new ProductCriteriaDto(
+            "test", 0, 10, null, null, null, null, 200.0, SortType.DEFAULT);
+        ProductListGetVm result = productService.findProductAdvance(criteriaDto);
+
+        assertNotNull(result);
+    }
+
+    @Test
+    void testFindProductAdvance_whenMultipleFilterValues_ReturnProductListGetVm() {
+        SearchHits<Product> searchHits = getSearchHits();
+
+        when(elasticsearchOperations.search(any(NativeQuery.class), eq(Product.class))).thenReturn(searchHits);
+
+        // Multiple comma-separated filter values
+        ProductCriteriaDto criteriaDto = new ProductCriteriaDto(
+            "test", 0, 10, "Nike,Adidas", "Shoes,Clothing", "Color,Size", 10.0, 100.0, SortType.DEFAULT);
+        ProductListGetVm result = productService.findProductAdvance(criteriaDto);
+
+        assertNotNull(result);
+    }
+
+    @Test
     void testAutoCompleteProductName_whenExistsProducts_returnProductNameListVm() {
 
         SearchHits<Product> searchHits =
@@ -160,6 +231,19 @@ class ProductServiceTest {
         assertEquals("Test Product", productNameGetVm.name());
 
         verify(elasticsearchOperations).search(any(NativeQuery.class), eq(Product.class));
+    }
+
+    @Test
+    void testAutoCompleteProductName_whenNoProducts_returnEmptyList() {
+        SearchHits<Product> emptySearchHits = getEmptySearchHits();
+
+        when(elasticsearchOperations.search(any(NativeQuery.class), eq(Product.class)))
+            .thenReturn(emptySearchHits);
+
+        ProductNameListVm result = productService.autoCompleteProductName("NonExistent");
+
+        assertNotNull(result);
+        assertTrue(result.productNames().isEmpty());
     }
 
     private static SearchHits<Product> getSearchHits() {
@@ -193,8 +277,7 @@ class ProductServiceTest {
             product
         );
 
-        return new SearchHits<>(
-        ) {
+        return new SearchHits<>() {
 
             @Override
             public @NotNull SearchHit<Product> getSearchHit(int index) {
@@ -224,6 +307,61 @@ class ProductServiceTest {
             @Override
             public long getTotalHits() {
                 return 1;
+            }
+
+            @Override
+            public @NotNull TotalHitsRelation getTotalHitsRelation() {
+                return TotalHitsRelation.EQUAL_TO;
+            }
+
+            @Override
+            public Suggest getSuggest() {
+                return null;
+            }
+
+            @Override
+            public String getPointInTimeId() {
+                return "";
+            }
+
+            @Override
+            public SearchShardStatistics getSearchShardStatistics() {
+                return null;
+            }
+        };
+    }
+
+    private static SearchHits<Product> getEmptySearchHits() {
+        return new SearchHits<>() {
+
+            @Override
+            public @NotNull SearchHit<Product> getSearchHit(int index) {
+                throw new IndexOutOfBoundsException();
+            }
+
+            @Override
+            public AggregationsContainer<?> getAggregations() {
+                return null;
+            }
+
+            @Override
+            public float getMaxScore() {
+                return 0;
+            }
+
+            @Override
+            public Duration getExecutionDuration() {
+                return Duration.ZERO;
+            }
+
+            @Override
+            public @NotNull List<SearchHit<Product>> getSearchHits() {
+                return List.of();
+            }
+
+            @Override
+            public long getTotalHits() {
+                return 0;
             }
 
             @Override
