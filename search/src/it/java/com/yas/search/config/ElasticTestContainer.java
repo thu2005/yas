@@ -1,5 +1,7 @@
 package com.yas.search.config;
 
+import java.time.Duration;
+import org.testcontainers.containers.wait.strategy.HttpWaitStrategy;
 import org.testcontainers.elasticsearch.ElasticsearchContainer;
 
 public class ElasticTestContainer extends ElasticsearchContainer {
@@ -17,5 +19,9 @@ public class ElasticTestContainer extends ElasticsearchContainer {
         this.withEnv("xpack.security.enabled", "false");
         this.withEnv("xpack.security.transport.ssl.enabled", "false");
         this.withEnv("xpack.security.http.ssl.enabled", "false");
+        this.setWaitStrategy(new HttpWaitStrategy()
+            .forPort(9200)
+            .forStatusCodeMatching(response -> response == 200)
+            .withStartupTimeout(Duration.ofMinutes(3)));
     }
 }
