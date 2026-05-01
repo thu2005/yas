@@ -81,6 +81,7 @@ class ProductSyncDataServiceTest {
             List.of("Color: Black", "Storage: 128GB", "RAM: 6GB")
         );
     }
+    
 
     @Test
     void testGetProductEsDetailById_whenNormalCase_returnProductEsDetailVm() {
