@@ -114,6 +114,7 @@ class OrderServiceTest {
         assertThat(result.orderItemVms()).hasSize(1);
     }
 
+
     @Test
     void getOrderWithItemsById_whenOrderNotFound_shouldThrow() {
         when(orderRepository.findById(999L)).thenReturn(Optional.empty());
@@ -264,6 +265,17 @@ class OrderServiceTest {
                 .build());
 
         assertThat(result.orderStatus()).isEqualTo(OrderStatus.ACCEPTED.getName());
+    }
+
+    @Test
+    void updateOrderPaymentStatus_whenOrderMissing_shouldThrow() {
+        when(orderRepository.findById(anyLong())).thenReturn(Optional.empty());
+
+        assertThrows(NotFoundException.class, () -> orderService.updateOrderPaymentStatus(PaymentOrderStatusVm.builder()
+                .orderId(73L)
+                .paymentId(999L)
+                .paymentStatus(PaymentStatus.PENDING.name())
+                .build()));
     }
 
     @Test
