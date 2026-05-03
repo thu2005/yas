@@ -2,7 +2,7 @@ package com.yas.media;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
-
+    
 import org.junit.jupiter.api.Test;
 import org.springframework.web.multipart.MultipartFile;
 import com.yas.media.utils.FileTypeValidator;
@@ -30,7 +30,7 @@ class FileUtilsTest {
         // Giải quyết triệt để lỗi NullPointerException tại FileTypeValidator.java:28
         ConstraintValidatorContext context = mock(ConstraintValidatorContext.class, RETURNS_DEEP_STUBS);
         
-        // --- BẮT ĐẦU PHỦ CÁC NHÁNH ---
+        // BẮT ĐẦU PHỦ CÁC NHÁNH
 
         // Case: File null
         try { validator.isValid(null, context); } catch (Exception ignored) {}
