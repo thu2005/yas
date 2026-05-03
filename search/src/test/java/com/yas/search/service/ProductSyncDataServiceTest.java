@@ -51,6 +51,7 @@ class ProductSyncDataServiceTest {
 
     }
 
+
     private void mockProductThumbnailVmsByUri() {
 
         final URI url = UriComponentsBuilder.fromUriString(PRODUCT_URL)
@@ -80,6 +81,7 @@ class ProductSyncDataServiceTest {
             List.of("Color: Black", "Storage: 128GB", "RAM: 6GB")
         );
     }
+    
 
     @Test
     void testGetProductEsDetailById_whenNormalCase_returnProductEsDetailVm() {
