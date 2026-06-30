@@ -101,7 +101,7 @@ def printNodePortUrls(String namespace, List<String> backendServices) {
     def printedServices = [] as Set
 
     def servicesToPrint = []
-    servicesToPrint.addAll(FRONTEND_SERVICES)
+    servicesToPrint.addAll(['storefront-ui', 'backoffice-ui', 'swagger-ui'])
     servicesToPrint.addAll(backendServices)
 
     echo "Node address for access URLs: ${nodeAddress}"
