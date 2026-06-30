@@ -243,13 +243,16 @@ pipeline {
                       -n "$TEST_NAMESPACE" --create-namespace
                     kubectl wait --for=condition=Established crd/postgresqls.acid.zalan.do --timeout=120s
 
-                    helm upgrade --install kafka-operator strimzi/strimzi-kafka-operator \
-                      -n "$TEST_NAMESPACE" --create-namespace \
-                      --version 0.45.0
+                    kubectl get crd -o name | grep 'strimzi.io' | xargs -r kubectl delete --ignore-not-found
+                    helm show crds strimzi/strimzi-kafka-operator --version 0.44.0 | kubectl apply -f -
+                    curl -fsSL https://github.com/strimzi/strimzi-kafka-operator/releases/download/0.44.0/strimzi-cluster-operator-0.44.0.yaml \
+                      | sed "s/namespace: .*/namespace: ${TEST_NAMESPACE}/" \
+                      | kubectl apply -n "$TEST_NAMESPACE" -f -
                     kubectl wait --for=condition=Established crd/kafkas.kafka.strimzi.io --timeout=120s
                     kubectl wait --for=condition=Established crd/kafkaconnects.kafka.strimzi.io --timeout=120s
                     kubectl wait --for=condition=Established crd/kafkaconnectors.kafka.strimzi.io --timeout=120s
                     kubectl get crd kafkas.kafka.strimzi.io -o jsonpath='{.spec.versions[?(@.name=="v1beta2")].served}' | grep true
+                    kubectl rollout status deployment/strimzi-cluster-operator -n "$TEST_NAMESPACE" --timeout=120s
 
                     helm upgrade --install elastic-operator elastic/eck-operator \
                       -n "$TEST_NAMESPACE" --create-namespace
