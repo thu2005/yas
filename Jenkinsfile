@@ -5,6 +5,57 @@ def runCapture(String cmd) {
     return sh(script: cmd, returnStdout: true).trim()
 }
 
+def readMavenModulesFromRootPom() {
+    def pom = readFile('pom.xml')
+    def matcher = (pom =~ /<module>([^<]+)<\/module>/)
+    def modules = []
+    matcher.each { m -> modules << m[1].trim() }
+    return modules.unique()
+}
+
+def buildAndPushBackendImage(String service, String tag) {
+    withEnv(["SERVICE_NAME=${service}", "IMAGE_TAG=${tag}"]) {
+        sh '''
+            docker build -t ${DOCKERHUB_NAMESPACE}/yas-${SERVICE_NAME}:${IMAGE_TAG} ${SERVICE_NAME}
+            docker tag ${DOCKERHUB_NAMESPACE}/yas-${SERVICE_NAME}:${IMAGE_TAG} ${DOCKERHUB_NAMESPACE}/yas-${SERVICE_NAME}:main
+            docker push ${DOCKERHUB_NAMESPACE}/yas-${SERVICE_NAME}:${IMAGE_TAG}
+            docker push ${DOCKERHUB_NAMESPACE}/yas-${SERVICE_NAME}:main
+        '''
+    }
+}
+
+def retagAndPushBackendImage(String service, String sourceTag, String targetTag) {
+    withEnv(["SERVICE_NAME=${service}", "SOURCE_TAG=${sourceTag}", "TARGET_TAG=${targetTag}"]) {
+        sh '''
+            docker pull ${DOCKERHUB_NAMESPACE}/yas-${SERVICE_NAME}:${SOURCE_TAG}
+            docker tag ${DOCKERHUB_NAMESPACE}/yas-${SERVICE_NAME}:${SOURCE_TAG} ${DOCKERHUB_NAMESPACE}/yas-${SERVICE_NAME}:${TARGET_TAG}
+            docker push ${DOCKERHUB_NAMESPACE}/yas-${SERVICE_NAME}:${TARGET_TAG}
+        '''
+    }
+}
+
+def updateGitOpsTag(String environmentName, String service, String tag) {
+    withEnv(["ENVIRONMENT_NAME=${environmentName}", "SERVICE_NAME=${service}", "IMAGE_TAG=${tag}"]) {
+        sh '''
+            sed -i -E 's#(^[[:space:]]*tag:[[:space:]]*).*$#\1"'"${IMAGE_TAG}"'"#' ${GITOPS_DIR}/environments/${ENVIRONMENT_NAME}/services/${SERVICE_NAME}.yaml
+        '''
+    }
+}
+
+def pushGitOpsUpdates(String gitopsBranch) {
+    withEnv(["GITOPS_BRANCH=${gitopsBranch}"]) {
+        sh '''
+            git add environments/dev/services environments/staging/services
+            if ! git diff --cached --quiet; then
+                git config user.name "$GITOPS_COMMIT_USER"
+                git config user.email "$GITOPS_COMMIT_EMAIL"
+                git commit -m "ci: sync GitOps images"
+                git push origin HEAD:${GITOPS_BRANCH}
+            fi
+        '''
+    }
+}
+
 // Calculate the list of changed files with multi-tier fallback + PR support
 def computeChangedFiles() {
     def cmd = null
@@ -32,19 +83,14 @@ def computeChangedFiles() {
     }
 }
 
-// Auto-read Maven module list from root pom.xml (no hard-coding needed)
-def readMavenModulesFromRootPom() {
-    def pom = readFile('pom.xml')
-    def matcher = (pom =~ /<module>([^<]+)<\/module>/)
-    def modules = []
-    matcher.each { m -> modules << m[1].trim() }
-    return modules.unique()
-}
-
 //  PIPELINE
 
 pipeline {
     agent any
+
+    parameters {
+        choice(name: 'PIPELINE_MODE', choices: ['ci'], description: 'CI mode for the root Jenkinsfile')
+    }
 
     tools {
         jdk 'jdk21'
@@ -60,18 +106,37 @@ pipeline {
 
     environment {
         MVN_ARGS = '-B -ntp'   // -B: batch mode, -ntp: no transfer progress (cleaner logs)
+        DOCKERHUB_NAMESPACE = 'thu2005'
+        DOCKERHUB_CREDENTIALS_ID = 'dockerhub-credentials'
+        GITOPS_REPO_URL = 'https://github.com/thu2005/gitops-yas.git'
+        SOURCE_REPO_URL = 'https://github.com/thu2005/yas.git'
+        GITOPS_DIR = 'gitops-yas'
+        GITOPS_TOKEN_CREDENTIALS_ID = 'github-credentials'
+        GITOPS_COMMIT_USER = 'jenkins-bot'
+        GITOPS_COMMIT_EMAIL = 'jenkins@local'
+        GITOPS_DEV_DIR = 'environments/dev/services'
+        GITOPS_STAGING_DIR = 'environments/staging/services'
     }
 
     stages {
 
         // 1. Checkout
         stage('Checkout') {
+            when {
+                expression { params.PIPELINE_MODE != 'cleanup' }
+            }
             steps {
-                checkout scm
                 script {
-                    // For PRs: fetch the target branch so git diff works correctly
-                    if (env.CHANGE_TARGET) {
-                        sh "git fetch --no-tags origin ${env.CHANGE_TARGET}"
+                    if (params.PIPELINE_MODE == 'developer_build') {
+                        deleteDir()
+                        git url: params.GIT_REMOTE_URL, branch: params.TARGET_BRANCH?.trim() ?: 'main'
+                        sh "git fetch --no-tags origin ${params.BASE_BRANCH?.trim() ?: 'main'}"
+                    } else {
+                        checkout scm
+                        // For PRs: fetch the target branch so git diff works correctly
+                        if (env.CHANGE_TARGET) {
+                            sh "git fetch --no-tags origin ${env.CHANGE_TARGET}"
+                        }
                     }
                 }
             }
@@ -79,6 +144,9 @@ pipeline {
 
         // 2. Gitleaks Scan
         stage('Gitleaks Scan') {
+            when {
+                expression { params.PIPELINE_MODE == 'ci' }
+            }
             steps {
                 script {
                     def status = sh(
@@ -120,6 +188,9 @@ pipeline {
 
         // 3. Detect Changes
         stage('Detect Changes') {
+            when {
+                expression { params.PIPELINE_MODE == 'ci' }
+            }
             steps {
                 script {
                     def allModules = readMavenModulesFromRootPom()
@@ -192,6 +263,9 @@ pipeline {
 
         // 4. Check Tools
         stage('Check Tools') {
+            when {
+                expression { params.PIPELINE_MODE == 'ci' }
+            }
             steps {
                 script {
                     if (!env.AFFECTED_MODULES?.trim()) {
@@ -207,7 +281,7 @@ pipeline {
         // 5. Build
         stage('Build') {
             when {
-                expression { env.AFFECTED_MODULES?.trim() }
+                expression { params.PIPELINE_MODE == 'ci' && env.AFFECTED_MODULES?.trim() }
             }
             steps {
                 echo "Building affected modules: ${env.AFFECTED_MODULES}..."
@@ -218,7 +292,7 @@ pipeline {
         // 6. Unit & Integration Tests
         stage('Unit & Integration Tests') {
             when {
-                expression { env.AFFECTED_MODULES?.trim() }
+                expression { params.PIPELINE_MODE == 'ci' && env.AFFECTED_MODULES?.trim() }
             }
             steps {
                 sh """
@@ -239,7 +313,7 @@ pipeline {
         // 7. Coverage Gate
         stage('Coverage Gate') {
             when {
-                expression { env.AFFECTED_MODULES?.trim() }
+                expression { params.PIPELINE_MODE == 'ci' && env.AFFECTED_MODULES?.trim() }
             }
             steps {
                 script {
@@ -277,6 +351,9 @@ pipeline {
 
         // 8. SonarQube Scan
         stage('SonarQube Scan') {
+            when {
+                expression { params.PIPELINE_MODE == 'ci' }
+            }
             steps {
                 script {
                     if (!env.AFFECTED_MODULES?.trim()) {
@@ -317,6 +394,9 @@ pipeline {
 
         // 9. Snyk Scan
         stage('Snyk Scan') {
+            when {
+                expression { params.PIPELINE_MODE == 'ci' }
+            }
             steps {
                 script {
                     if (!env.AFFECTED_MODULES?.trim()) {
@@ -367,6 +447,130 @@ pipeline {
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        stage('CD Dev GitOps Update') {
+            when {
+                branch 'main'
+            }
+            steps {
+                script {
+                    if (!env.AFFECTED_MODULES?.trim()) {
+                        echo 'No service changes detected. Skipping dev GitOps promotion.'
+                        return
+                    }
+
+                    def services = env.AFFECTED_MODULES.split(',').collect { it.trim() }.findAll { it && fileExists("${it}/Dockerfile") }
+                    if (!services) {
+                        echo 'No deployable services detected. Skipping dev GitOps promotion.'
+                        return
+                    }
+
+                    def shortCommit = runCapture('git rev-parse --short=8 HEAD')
+
+                    withCredentials([
+                        usernamePassword(credentialsId: env.DOCKERHUB_CREDENTIALS_ID, usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_PASSWORD'),
+                        string(credentialsId: env.GITOPS_TOKEN_CREDENTIALS_ID, variable: 'GITOPS_TOKEN')
+                    ]) {
+                        sh '''
+                            printf '%s' "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+                        '''
+
+                        services.each { service ->
+                            buildAndPushBackendImage(service, shortCommit)
+                        }
+
+                        sh '''
+                            rm -rf "$GITOPS_DIR"
+                            git clone --depth 1 https://x-access-token:${GITOPS_TOKEN}@${GITOPS_REPO_URL#https://} "$GITOPS_DIR"
+                        '''
+
+                        dir(env.GITOPS_DIR) {
+                            services.each { service ->
+                                updateGitOpsTag('dev', service, shortCommit)
+                            }
+
+                            withEnv(["SHORT_COMMIT=${shortCommit}"]) {
+                                sh '''
+                                    git config user.name "$GITOPS_COMMIT_USER"
+                                    git config user.email "$GITOPS_COMMIT_EMAIL"
+                                    git add environments/dev/services
+                                    if ! git diff --cached --quiet; then
+                                        git commit -m "ci(dev): sync images to ${SHORT_COMMIT}"
+                                        git push origin HEAD:main
+                                    fi
+                                '''
+                            }
+                        }
+
+                        sh '''
+                            docker logout || true
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('CD Staging GitOps Update') {
+            when {
+                tag 'v*'
+            }
+            steps {
+                script {
+                    if (!env.AFFECTED_MODULES?.trim()) {
+                        echo 'No service changes detected. Skipping staging GitOps promotion.'
+                        return
+                    }
+
+                    def services = env.AFFECTED_MODULES.split(',').collect { it.trim() }.findAll { it && fileExists("${it}/Dockerfile") }
+                    if (!services) {
+                        echo 'No deployable services detected. Skipping staging GitOps promotion.'
+                        return
+                    }
+
+                    def releaseTag = env.TAG_NAME?.trim() ?: runCapture('git describe --tags --exact-match')
+
+                    withCredentials([
+                        usernamePassword(credentialsId: env.DOCKERHUB_CREDENTIALS_ID, usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_PASSWORD'),
+                        string(credentialsId: env.GITOPS_TOKEN_CREDENTIALS_ID, variable: 'GITOPS_TOKEN')
+                    ]) {
+                        sh '''
+                            printf '%s' "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+                        '''
+
+                        services.each { service ->
+                            retagAndPushBackendImage(service, 'main', releaseTag)
+                        }
+
+                        sh '''
+                            rm -rf "$GITOPS_DIR"
+                            git clone --depth 1 https://x-access-token:${GITOPS_TOKEN}@${GITOPS_REPO_URL#https://} "$GITOPS_DIR"
+                        '''
+
+                        dir(env.GITOPS_DIR) {
+                            services.each { service ->
+                                updateGitOpsTag('staging', service, releaseTag)
+                            }
+
+                            withEnv(["RELEASE_TAG=${releaseTag}"]) {
+                                sh '''
+                                    git config user.name "$GITOPS_COMMIT_USER"
+                                    git config user.email "$GITOPS_COMMIT_EMAIL"
+                                    git add environments/staging/services
+                                    if ! git diff --cached --quiet; then
+                                        git commit -m "ci(staging): release ${RELEASE_TAG}"
+                                        git push origin HEAD:main
+                                    fi
+                                '''
+                            }
+                        }
+
+                        sh '''
+                            docker logout || true
+                        '''
                     }
                 }
             }

@@ -1,0 +1,79 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'TARGET_NAMESPACE', defaultValue: '', description: 'Namespace to delete (for example: test-user-service1-service2)')
+    }
+
+    stages {
+        stage('Validate Input') {
+            steps {
+                script {
+                    if (!params.TARGET_NAMESPACE?.trim()) {
+                        error('TARGET_NAMESPACE is required')
+                    }
+
+                    if (!(params.TARGET_NAMESPACE ==~ /^test-[a-z0-9]([-a-z0-9]*[a-z0-9])?$/)) {
+                        error("Unsafe namespace '${params.TARGET_NAMESPACE}'. Only namespaces matching 'test-*' are allowed.")
+                    }
+                }
+            }
+        }
+
+        stage('Delete Namespace') {
+            steps {
+                withEnv(["TARGET_NAMESPACE=${params.TARGET_NAMESPACE}"]) {
+                    sh '''
+                        set +e
+
+                        kubectl delete kafka,kafkaconnect,kafkaconnector,keycloak,keycloakrealmimport,opentelemetrycollector,grafana,grafanadashboard,grafanadatasource \
+                            --all -n "$TARGET_NAMESPACE" --ignore-not-found --timeout=60s || true
+
+                        kubectl delete pvc --all -n "$TARGET_NAMESPACE" --ignore-not-found --timeout=60s || true
+
+                        kubectl delete namespace "$TARGET_NAMESPACE" --ignore-not-found --timeout=120s && exit 0 || true
+
+                        echo 'Namespace is still terminating. Attempting finalizer cleanup...'
+                        for kind in configmaps secrets pods deployments statefulsets daemonsets replicasets services jobs cronjobs serviceaccounts roles rolebindings persistentvolumeclaims; do
+                            kubectl get "$kind" -n "$TARGET_NAMESPACE" \
+                                -o go-template='{{range .items}}{{if .metadata.finalizers}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}' 2>/dev/null \
+                                | while IFS= read -r name; do
+                                    if [ -n "$name" ]; then
+                                        echo "Removing finalizers from ${kind}/${name}"
+                                        kubectl patch "$kind" "$name" -n "$TARGET_NAMESPACE" \
+                                            -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+                                    fi
+                                  done
+                        done
+
+                        printf '{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"%s"},"spec":{"finalizers":[]}}' "$TARGET_NAMESPACE" \
+                            | kubectl replace --raw "/api/v1/namespaces/$TARGET_NAMESPACE/finalize" -f - 2>/dev/null || true
+
+                        kubectl wait --for=delete namespace/"$TARGET_NAMESPACE" --timeout=60s || true
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            script {
+                echo '========================================================================'
+                echo "CLEANUP SUCCESSFUL for namespace ${params.TARGET_NAMESPACE}"
+                echo '========================================================================'
+                currentBuild.displayName = "#${currentBuild.number} - ${params.TARGET_NAMESPACE}"
+                currentBuild.description = "Namespace ${params.TARGET_NAMESPACE} deleted successfully."
+            }
+        }
+        failure {
+            script {
+                echo '========================================================================'
+                echo "CLEANUP FAILED for namespace ${params.TARGET_NAMESPACE}"
+                echo '========================================================================'
+                currentBuild.displayName = "#${currentBuild.number} - ${params.TARGET_NAMESPACE}"
+                currentBuild.description = "Failed to delete namespace ${params.TARGET_NAMESPACE}."
+            }
+        }
+    }
+}

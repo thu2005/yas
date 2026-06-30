@@ -1,0 +1,306 @@
+def SERVICE_PARAM_MAP = [
+    cart            : 'TAG_CART',
+    tax             : 'TAG_TAX',
+    order           : 'TAG_ORDER',
+    product         : 'TAG_PRODUCT',
+    media           : 'TAG_MEDIA',
+    rating          : 'TAG_RATING',
+    customer        : 'TAG_CUSTOMER',
+    location        : 'TAG_LOCATION',
+    inventory       : 'TAG_INVENTORY',
+    search          : 'TAG_SEARCH',
+    payment         : 'TAG_PAYMENT',
+    'payment-paypal': 'TAG_PAYMENT_PAYPAL',
+    promotion       : 'TAG_PROMOTION',
+    recommendation  : 'TAG_RECOMMENDATION',
+    sampledata      : 'TAG_SAMPLEDATA',
+    webhook         : 'TAG_WEBHOOK',
+    'backoffice-bff': 'TAG_BACKOFFICE_BFF',
+    'storefront-bff': 'TAG_STOREFRONT_BFF',
+    'backoffice-ui' : 'TAG_BACKOFFICE_UI',
+    'storefront-ui' : 'TAG_STOREFRONT_UI'
+]
+
+def SERVICE_IMAGE_KEY_MAP = [
+    'backoffice-ui': 'ui',
+    'storefront-ui': 'ui'
+]
+
+def FRONTEND_SERVICES = ['storefront-ui', 'backoffice-ui']
+def RESOLVED_BRANCH_BY_SERVICE = [:]
+def RESOLVED_TAG_BY_SERVICE = [:]
+def NON_MAIN_SERVICES = []
+
+def normalizeName(String input) {
+    return input.toLowerCase().replaceAll('[^a-z0-9-]', '-').replaceAll('-+', '-').replaceAll('^-|-$', '')
+}
+
+def normalizeBranchInput(String rawValue) {
+    def value = (rawValue ?: 'main').trim()
+    if (!value) {
+        return 'main'
+    }
+
+    value = value.replaceFirst('^refs/heads/', '')
+    value = value.replaceFirst('^origin/', '')
+    return value
+}
+
+def validateBranchName(String branchName) {
+    if (branchName == 'main') {
+        return
+    }
+
+    if (!(branchName ==~ /^[A-Za-z0-9._\/-]+$/)) {
+        error("Invalid branch name '${branchName}'. Allowed characters: letters, numbers, '.', '_', '-', '/'.")
+    }
+}
+
+def resolveBranchToShortCommit(String repositoryUrl, String branchName) {
+    validateBranchName(branchName)
+
+    if (branchName == 'main') {
+        return 'main'
+    }
+
+    def output = sh(
+        script: "git ls-remote --heads '${repositoryUrl}' 'refs/heads/${branchName}'",
+        returnStdout: true
+    ).trim()
+
+    if (!output) {
+        error("Branch '${branchName}' does not exist in source repository: ${repositoryUrl}")
+    }
+
+    def commitSha = output.tokenize()[0]
+    if (!commitSha || commitSha.length() < 8) {
+        error("Could not resolve a valid commit SHA for branch '${branchName}'.")
+    }
+
+    return commitSha.take(8)
+}
+
+def resolveNodeAddress() {
+    def nodeAddress = sh(
+        script: "kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type==\"InternalIP\")].address}' || true",
+        returnStdout: true
+    ).trim()
+
+    return nodeAddress ?: 'localhost'
+}
+
+def resolveServiceNodePort(String namespace, String serviceName) {
+    return sh(
+        script: "kubectl get svc ${serviceName} -n ${namespace} -o jsonpath='{.spec.ports[0].nodePort}' || true",
+        returnStdout: true
+    ).trim()
+}
+
+def printNodePortUrls(String namespace, List<String> backendServices) {
+    def nodeAddress = resolveNodeAddress()
+    def printedServices = [] as Set
+
+    def servicesToPrint = []
+    servicesToPrint.addAll(FRONTEND_SERVICES)
+    servicesToPrint.addAll(backendServices)
+
+    echo "Node address for access URLs: ${nodeAddress}"
+
+    servicesToPrint.each { serviceName ->
+        if (printedServices.contains(serviceName)) {
+            return
+        }
+
+        def nodePort = resolveServiceNodePort(namespace, serviceName)
+        if (nodePort) {
+            echo "ACCESS URL [${serviceName}]: http://${nodeAddress}:${nodePort}"
+            printedServices << serviceName
+        } else {
+            echo "ACCESS URL [${serviceName}]: NodePort not found (service may still be starting)."
+        }
+    }
+}
+
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'TAG_CART', defaultValue: 'main', description: 'Branch name for cart')
+        string(name: 'TAG_TAX', defaultValue: 'main', description: 'Branch name for tax')
+        string(name: 'TAG_ORDER', defaultValue: 'main', description: 'Branch name for order')
+        string(name: 'TAG_PRODUCT', defaultValue: 'main', description: 'Branch name for product')
+        string(name: 'TAG_MEDIA', defaultValue: 'main', description: 'Branch name for media')
+        string(name: 'TAG_RATING', defaultValue: 'main', description: 'Branch name for rating')
+        string(name: 'TAG_CUSTOMER', defaultValue: 'main', description: 'Branch name for customer')
+        string(name: 'TAG_LOCATION', defaultValue: 'main', description: 'Branch name for location')
+        string(name: 'TAG_INVENTORY', defaultValue: 'main', description: 'Branch name for inventory')
+        string(name: 'TAG_SEARCH', defaultValue: 'main', description: 'Branch name for search')
+        string(name: 'TAG_PAYMENT', defaultValue: 'main', description: 'Branch name for payment')
+        string(name: 'TAG_PAYMENT_PAYPAL', defaultValue: 'main', description: 'Branch name for payment-paypal')
+        string(name: 'TAG_PROMOTION', defaultValue: 'main', description: 'Branch name for promotion')
+        string(name: 'TAG_RECOMMENDATION', defaultValue: 'main', description: 'Branch name for recommendation')
+        string(name: 'TAG_SAMPLEDATA', defaultValue: 'main', description: 'Branch name for sampledata')
+        string(name: 'TAG_WEBHOOK', defaultValue: 'main', description: 'Branch name for webhook')
+        string(name: 'TAG_BACKOFFICE_BFF', defaultValue: 'main', description: 'Branch name for backoffice-bff')
+        string(name: 'TAG_STOREFRONT_BFF', defaultValue: 'main', description: 'Branch name for storefront-bff')
+        string(name: 'TAG_BACKOFFICE_UI', defaultValue: 'main', description: 'Branch name for backoffice-ui')
+        string(name: 'TAG_STOREFRONT_UI', defaultValue: 'main', description: 'Branch name for storefront-ui')
+    }
+
+    environment {
+        SOURCE_REPO_URL = 'https://github.com/thu2005/yas.git'
+        MAVEN_OPTS = '-Dmaven.repo.local=.m2/repository'
+        CLEAN_JOB_NAME = 'developer_destroy'
+        CLEAN_JOB_TOKEN = 'yas-destroy-token'
+        GITOPS_DIR = 'gitops-yas'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Resolve Branch Inputs To Tags') {
+            steps {
+                script {
+                    def groupedBranches = [:]
+
+                    SERVICE_PARAM_MAP.each { service, paramName ->
+                        def branchName = normalizeBranchInput(params[paramName])
+                        RESOLVED_BRANCH_BY_SERVICE[service] = branchName
+
+                        if (branchName != 'main') {
+                            NON_MAIN_SERVICES << service
+                        }
+
+                        groupedBranches.computeIfAbsent(branchName) { [] } << service
+                    }
+
+                    def tagByBranch = ['main': 'main']
+                    groupedBranches.each { branchName, services ->
+                        if (branchName == 'main') {
+                            return
+                        }
+
+                        def shortCommit = resolveBranchToShortCommit(env.SOURCE_REPO_URL, branchName)
+                        tagByBranch[branchName] = shortCommit
+                        echo "Resolved ${branchName} -> ${shortCommit} for ${services.join(', ')}"
+                    }
+
+                    SERVICE_PARAM_MAP.keySet().each { service ->
+                        def branchName = RESOLVED_BRANCH_BY_SERVICE[service]
+                        RESOLVED_TAG_BY_SERVICE[service] = tagByBranch[branchName]
+                    }
+
+                    echo "Resolved branches: ${RESOLVED_BRANCH_BY_SERVICE}"
+                    echo "Resolved tags: ${RESOLVED_TAG_BY_SERVICE}"
+                }
+            }
+        }
+
+        stage('Resolve Namespace') {
+            steps {
+                script {
+                    def userId = currentBuild.getBuildCauses().find { it.userId }?.userId ?: 'anonymous'
+                    userId = normalizeName(userId)
+
+                    def serviceSuffix = NON_MAIN_SERVICES ? normalizeName(NON_MAIN_SERVICES.join('-')) : 'baseline'
+                    def namespace = normalizeName("test-${userId}-${serviceSuffix}")
+                    if (namespace.length() > 63) {
+                        namespace = namespace.take(63).replaceAll('-+$', '')
+                    }
+
+                    env.TEST_NAMESPACE = namespace
+                    env.CLEAN_JOB_URL = "${env.JENKINS_URL}job/${env.CLEAN_JOB_NAME}/buildWithParameters?token=${env.CLEAN_JOB_TOKEN}&TARGET_NAMESPACE=${env.TEST_NAMESPACE}"
+
+                    echo "Generated namespace: ${env.TEST_NAMESPACE}"
+                    echo "Cleanup link: ${env.CLEAN_JOB_URL}"
+                }
+            }
+        }
+
+        stage('Deploy Base Infrastructure') {
+            steps {
+                sh '''
+                    kubectl create namespace "$TEST_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+
+                    helm upgrade --install postgres k8s/deploy/postgres/postgresql \
+                      -n "$TEST_NAMESPACE" --create-namespace
+
+                    helm upgrade --install pgadmin k8s/deploy/postgres/pgadmin \
+                      -n "$TEST_NAMESPACE" --create-namespace
+
+                    helm upgrade --install kafka-cluster k8s/deploy/kafka/kafka-cluster \
+                      -n "$TEST_NAMESPACE" --create-namespace
+
+                    helm upgrade --install elasticsearch-cluster k8s/deploy/elasticsearch/elasticsearch-cluster \
+                      -n "$TEST_NAMESPACE" --create-namespace
+
+                    kubectl apply -f https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.0.2/kubernetes/keycloaks.k8s.keycloak.org-v1.yml
+                    kubectl apply -f https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.0.2/kubernetes/keycloakrealmimports.k8s.keycloak.org-v1.yml
+                    kubectl apply -f https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.0.2/kubernetes/kubernetes.yml -n "$TEST_NAMESPACE"
+                    kubectl rollout status deployment/keycloak-operator -n "$TEST_NAMESPACE" --timeout=120s || true
+
+                    helm upgrade --install keycloak k8s/deploy/keycloak/keycloak \
+                      -n "$TEST_NAMESPACE" --create-namespace
+                '''
+            }
+        }
+
+        stage('Deploy Services') {
+            steps {
+                script {
+                    def keycloakClusterIp = sh(
+                        script: "kubectl get svc keycloak-service -n ${env.TEST_NAMESPACE} -o jsonpath='{.spec.clusterIP}' || true",
+                        returnStdout: true
+                    ).trim()
+
+                    SERVICE_PARAM_MAP.each { service, _ ->
+                        def tag = RESOLVED_TAG_BY_SERVICE[service]
+                        def imageKey = SERVICE_IMAGE_KEY_MAP.get(service, 'backend')
+                        def exposeNodePort = (tag != 'main') || SERVICE_IMAGE_KEY_MAP.containsKey(service)
+
+                        sh """
+                            helm dependency build k8s/charts/${service}
+                            helm upgrade --install ${service} k8s/charts/${service} \
+                              -n ${env.TEST_NAMESPACE} --create-namespace \
+                              --set ${imageKey}.image.tag=${tag} \
+                              --set ${imageKey}.image.pullPolicy=Always \
+                              --set global.keycloakInternalIP=${keycloakClusterIp} \
+                              --set global.identityDomain=identity.yas.local.com ${exposeNodePort ? "--set ${imageKey}.service.type=NodePort" : ''}
+                        """
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            script {
+                def backendChangedServices = NON_MAIN_SERVICES.findAll { !SERVICE_IMAGE_KEY_MAP.containsKey(it) }.unique()
+                echo '==========================================================================='
+                echo "DEPLOYMENT SUCCESSFUL for namespace ${env.TEST_NAMESPACE}"
+                printNodePortUrls(env.TEST_NAMESPACE, backendChangedServices)
+                echo "Cleanup job: ${env.CLEAN_JOB_URL}"
+                echo '==========================================================================='
+
+                currentBuild.displayName = "#${currentBuild.number} - ${env.TEST_NAMESPACE}"
+                currentBuild.description = "Namespace ${env.TEST_NAMESPACE} is ready. Cleanup: ${env.CLEAN_JOB_URL}"
+            }
+        }
+        failure {
+            script {
+                echo '==========================================================================='
+                echo "DEPLOYMENT FAILED for namespace ${env.TEST_NAMESPACE}"
+                echo "Cleanup job: ${env.CLEAN_JOB_URL}"
+                echo '==========================================================================='
+
+                currentBuild.displayName = "#${currentBuild.number} - ${env.TEST_NAMESPACE}"
+                currentBuild.description = "Deployment failed. Cleanup: ${env.CLEAN_JOB_URL}"
+            }
+        }
+    }
+}
