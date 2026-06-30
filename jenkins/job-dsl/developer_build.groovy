@@ -34,7 +34,15 @@ pipelineJob('developer_build') {
                     remote {
                         url('https://github.com/thu2005/yas.git')
                     }
-                    branches('*/main')
+                    branches('*/devops-cd')
+                    extensions {
+                        cloneOptions {
+                            shallow(true)
+                            depth(1)
+                            noTags(true)
+                            timeout(30)
+                        }
+                    }
                 }
             }
             scriptPath('Jenkinsfile.build')
