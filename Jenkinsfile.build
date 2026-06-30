@@ -143,6 +143,7 @@ pipeline {
     environment {
         SOURCE_REPO_URL = 'https://github.com/thu2005/yas.git'
         DOCKERHUB_NAMESPACE = 'thu2005'
+        KUBECONFIG = '/var/jenkins_home/.kube/config'
         MAVEN_OPTS = '-Dmaven.repo.local=.m2/repository'
         CLEAN_JOB_NAME = 'developer_destroy'
         CLEAN_JOB_TOKEN = 'yas-destroy-token'

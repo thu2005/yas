@@ -5,6 +5,10 @@ pipeline {
         string(name: 'TARGET_NAMESPACE', defaultValue: '', description: 'Namespace to delete (for example: test-user-service1-service2)')
     }
 
+    environment {
+        KUBECONFIG = '/var/jenkins_home/.kube/config'
+    }
+
     stages {
         stage('Validate Input') {
             steps {
