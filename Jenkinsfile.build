@@ -244,10 +244,12 @@ pipeline {
                     kubectl wait --for=condition=Established crd/postgresqls.acid.zalan.do --timeout=120s
 
                     helm upgrade --install kafka-operator strimzi/strimzi-kafka-operator \
-                      -n "$TEST_NAMESPACE" --create-namespace
+                      -n "$TEST_NAMESPACE" --create-namespace \
+                      --version 0.45.0
                     kubectl wait --for=condition=Established crd/kafkas.kafka.strimzi.io --timeout=120s
                     kubectl wait --for=condition=Established crd/kafkaconnects.kafka.strimzi.io --timeout=120s
                     kubectl wait --for=condition=Established crd/kafkaconnectors.kafka.strimzi.io --timeout=120s
+                    kubectl get crd kafkas.kafka.strimzi.io -o jsonpath='{.spec.versions[?(@.name=="v1beta2")].served}' | grep true
 
                     helm upgrade --install elastic-operator elastic/eck-operator \
                       -n "$TEST_NAMESPACE" --create-namespace
