@@ -224,6 +224,26 @@ pipeline {
                 sh '''
                     kubectl create namespace "$TEST_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 
+                    helm repo add postgres-operator-charts https://opensource.zalando.com/postgres-operator/charts/postgres-operator
+                    helm repo add strimzi https://strimzi.io/charts/
+                    helm repo add elastic https://helm.elastic.co
+                    helm repo update
+
+                    helm upgrade --install postgres-operator postgres-operator-charts/postgres-operator \
+                      -n "$TEST_NAMESPACE" --create-namespace
+                    kubectl wait --for=condition=Established crd/postgresqls.acid.zalan.do --timeout=120s
+
+                    helm upgrade --install kafka-operator strimzi/strimzi-kafka-operator \
+                      -n "$TEST_NAMESPACE" --create-namespace
+                    kubectl wait --for=condition=Established crd/kafkas.kafka.strimzi.io --timeout=120s
+                    kubectl wait --for=condition=Established crd/kafkaconnects.kafka.strimzi.io --timeout=120s
+                    kubectl wait --for=condition=Established crd/kafkaconnectors.kafka.strimzi.io --timeout=120s
+
+                    helm upgrade --install elastic-operator elastic/eck-operator \
+                      -n "$TEST_NAMESPACE" --create-namespace
+                    kubectl wait --for=condition=Established crd/elasticsearches.elasticsearch.k8s.elastic.co --timeout=120s
+                    kubectl wait --for=condition=Established crd/kibanas.kibana.k8s.elastic.co --timeout=120s
+
                     helm upgrade --install postgres k8s/deploy/postgres/postgresql \
                       -n "$TEST_NAMESPACE" --create-namespace
 
