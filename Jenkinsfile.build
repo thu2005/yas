@@ -169,7 +169,10 @@ pipeline {
                             NON_MAIN_SERVICES << service
                         }
 
-                        groupedBranches.computeIfAbsent(branchName) { [] } << service
+                        if (!groupedBranches.containsKey(branchName)) {
+                            groupedBranches[branchName] = []
+                        }
+                        groupedBranches[branchName] << service
                     }
 
                     def tagByBranch = ['main': 'main']
