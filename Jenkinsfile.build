@@ -26,6 +26,11 @@ def SERVICE_IMAGE_KEY_MAP = [
     'storefront-ui': 'ui'
 ]
 
+def SERVICE_IMAGE_REPOSITORY_MAP = [
+    'backoffice-ui' : 'yas-backoffice',
+    'storefront-ui' : 'yas-storefront'
+]
+
 def FRONTEND_SERVICES = ['storefront-ui', 'backoffice-ui']
 def RESOLVED_BRANCH_BY_SERVICE = [:]
 def RESOLVED_TAG_BY_SERVICE = [:]
@@ -149,6 +154,7 @@ pipeline {
 
     environment {
         SOURCE_REPO_URL = 'https://github.com/thu2005/yas.git'
+        DOCKERHUB_NAMESPACE = 'thu2005'
         MAVEN_OPTS = '-Dmaven.repo.local=.m2/repository'
         CLEAN_JOB_NAME = 'developer_destroy'
         CLEAN_JOB_TOKEN = 'yas-destroy-token'
@@ -260,12 +266,15 @@ pipeline {
                     SERVICE_PARAM_MAP.each { service, _ ->
                         def tag = RESOLVED_TAG_BY_SERVICE[service]
                         def imageKey = SERVICE_IMAGE_KEY_MAP.get(service, 'backend')
+                        def imageName = SERVICE_IMAGE_REPOSITORY_MAP.get(service, "yas-${service}")
+                        def imageRepository = "${env.DOCKERHUB_NAMESPACE}/${imageName}"
                         def exposeNodePort = (tag != 'main') || SERVICE_IMAGE_KEY_MAP.containsKey(service)
 
                         sh """
                             helm dependency build k8s/charts/${service}
                             helm upgrade --install ${service} k8s/charts/${service} \
                               -n ${env.TEST_NAMESPACE} --create-namespace \
+                              --set ${imageKey}.image.repository=${imageRepository} \
                               --set ${imageKey}.image.tag=${tag} \
                               --set ${imageKey}.image.pullPolicy=Always \
                               --set global.keycloakInternalIP=${keycloakClusterIp} \

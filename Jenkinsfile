@@ -13,14 +13,19 @@ def readMavenModulesFromRootPom() {
     return modules.unique()
 }
 
-def buildAndPushBackendImage(String service, String tag) {
+def buildAndPushBackendImage(String service, String tag, boolean pushMainTag = true) {
     withEnv(["SERVICE_NAME=${service}", "IMAGE_TAG=${tag}"]) {
         sh '''
             docker build -t ${DOCKERHUB_NAMESPACE}/yas-${SERVICE_NAME}:${IMAGE_TAG} ${SERVICE_NAME}
-            docker tag ${DOCKERHUB_NAMESPACE}/yas-${SERVICE_NAME}:${IMAGE_TAG} ${DOCKERHUB_NAMESPACE}/yas-${SERVICE_NAME}:main
             docker push ${DOCKERHUB_NAMESPACE}/yas-${SERVICE_NAME}:${IMAGE_TAG}
-            docker push ${DOCKERHUB_NAMESPACE}/yas-${SERVICE_NAME}:main
         '''
+
+        if (pushMainTag) {
+            sh '''
+                docker tag ${DOCKERHUB_NAMESPACE}/yas-${SERVICE_NAME}:${IMAGE_TAG} ${DOCKERHUB_NAMESPACE}/yas-${SERVICE_NAME}:main
+                docker push ${DOCKERHUB_NAMESPACE}/yas-${SERVICE_NAME}:main
+            '''
+        }
     }
 }
 
@@ -345,6 +350,49 @@ pipeline {
                             [threshold: 70.0, metric: 'INSTRUCTION', baseline: 'PROJECT', criticality: 'FAILURE']
                         ]
                     )
+                }
+            }
+        }
+
+        stage('CI Docker Image Push') {
+            when {
+                expression {
+                    params.PIPELINE_MODE == 'ci' &&
+                    env.AFFECTED_MODULES?.trim() &&
+                    !env.CHANGE_ID &&
+                    env.BRANCH_NAME != 'main' &&
+                    !env.TAG_NAME
+                }
+            }
+            steps {
+                script {
+                    def services = env.AFFECTED_MODULES
+                        .split(',')
+                        .collect { it.trim() }
+                        .findAll { it && fileExists("${it}/Dockerfile") }
+
+                    if (!services) {
+                        echo 'No deployable services detected. Skipping Docker image push.'
+                        return
+                    }
+
+                    def shortCommit = runCapture('git rev-parse --short=8 HEAD')
+
+                    withCredentials([
+                        usernamePassword(credentialsId: env.DOCKERHUB_CREDENTIALS_ID, usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_PASSWORD')
+                    ]) {
+                        sh '''
+                            printf '%s' "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+                        '''
+
+                        services.each { service ->
+                            buildAndPushBackendImage(service, shortCommit, false)
+                        }
+
+                        sh '''
+                            docker logout || true
+                        '''
+                    }
                 }
             }
         }
