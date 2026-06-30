@@ -142,6 +142,7 @@ pipeline {
 
     environment {
         SOURCE_REPO_URL = 'https://github.com/thu2005/yas.git'
+        GITOPS_REPO_URL = 'https://github.com/thu2005/gitops-yas.git'
         DOCKERHUB_NAMESPACE = 'thu2005'
         KUBECONFIG = '/var/jenkins_home/.kube/config'
         MAVEN_OPTS = '-Dmaven.repo.local=.m2/repository'
@@ -219,6 +220,15 @@ pipeline {
             }
         }
 
+        stage('Clone GitOps Repository') {
+            steps {
+                sh '''
+                    rm -rf "$GITOPS_DIR"
+                    git clone --depth 1 "$GITOPS_REPO_URL" "$GITOPS_DIR"
+                '''
+            }
+        }
+
         stage('Deploy Base Infrastructure') {
             steps {
                 sh '''
@@ -244,25 +254,46 @@ pipeline {
                     kubectl wait --for=condition=Established crd/elasticsearches.elasticsearch.k8s.elastic.co --timeout=120s
                     kubectl wait --for=condition=Established crd/kibanas.kibana.k8s.elastic.co --timeout=120s
 
-                    helm upgrade --install postgres k8s/deploy/postgres/postgresql \
-                      -n "$TEST_NAMESPACE" --create-namespace
+                    helm upgrade --install postgres "$GITOPS_DIR/infrastructure/postgres/postgresql" \
+                      -n "$TEST_NAMESPACE" --create-namespace \
+                      -f "$GITOPS_DIR/environments/test/values-shared.yaml"
 
-                    helm upgrade --install pgadmin k8s/deploy/postgres/pgadmin \
-                      -n "$TEST_NAMESPACE" --create-namespace
+                    helm upgrade --install pgadmin "$GITOPS_DIR/infrastructure/postgres/pgadmin" \
+                      -n "$TEST_NAMESPACE" --create-namespace \
+                      -f "$GITOPS_DIR/environments/test/values-shared.yaml"
 
-                    helm upgrade --install kafka-cluster k8s/deploy/kafka/kafka-cluster \
-                      -n "$TEST_NAMESPACE" --create-namespace
+                    helm dependency build "$GITOPS_DIR/infrastructure/redis"
+                    helm upgrade --install redis "$GITOPS_DIR/infrastructure/redis" \
+                      -n "$TEST_NAMESPACE" --create-namespace \
+                      -f "$GITOPS_DIR/environments/test/values-shared.yaml"
 
-                    helm upgrade --install elasticsearch-cluster k8s/deploy/elasticsearch/elasticsearch-cluster \
-                      -n "$TEST_NAMESPACE" --create-namespace
+                    helm upgrade --install kafka-cluster "$GITOPS_DIR/infrastructure/kafka/kafka-cluster" \
+                      -n "$TEST_NAMESPACE" --create-namespace \
+                      -f "$GITOPS_DIR/environments/test/values-shared.yaml"
+
+                    helm upgrade --install elasticsearch-cluster "$GITOPS_DIR/infrastructure/elasticsearch/elasticsearch-cluster" \
+                      -n "$TEST_NAMESPACE" --create-namespace \
+                      -f "$GITOPS_DIR/environments/test/values-shared.yaml"
 
                     kubectl apply -f https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.0.2/kubernetes/keycloaks.k8s.keycloak.org-v1.yml
                     kubectl apply -f https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.0.2/kubernetes/keycloakrealmimports.k8s.keycloak.org-v1.yml
                     kubectl apply -f https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.0.2/kubernetes/kubernetes.yml -n "$TEST_NAMESPACE"
                     kubectl rollout status deployment/keycloak-operator -n "$TEST_NAMESPACE" --timeout=120s || true
 
-                    helm upgrade --install keycloak k8s/deploy/keycloak/keycloak \
-                      -n "$TEST_NAMESPACE" --create-namespace
+                    helm upgrade --install keycloak "$GITOPS_DIR/infrastructure/keycloak/keycloak" \
+                      -n "$TEST_NAMESPACE" --create-namespace \
+                      -f "$GITOPS_DIR/environments/test/values-shared.yaml"
+                '''
+            }
+        }
+
+        stage('Deploy Shared Configuration') {
+            steps {
+                sh '''
+                    helm dependency build "$GITOPS_DIR/charts/yas-configuration"
+                    helm upgrade --install yas-configuration "$GITOPS_DIR/charts/yas-configuration" \
+                      -n "$TEST_NAMESPACE" --create-namespace \
+                      -f "$GITOPS_DIR/environments/test/values-shared.yaml"
                 '''
             }
         }
@@ -282,9 +313,10 @@ pipeline {
                     servicesToDeploy.each { service ->
                         if (STATIC_CHART_SERVICES.contains(service)) {
                             sh """
-                                helm dependency build k8s/charts/${service}
-                                helm upgrade --install ${service} k8s/charts/${service} \
+                                helm dependency build ${env.GITOPS_DIR}/charts/${service}
+                                helm upgrade --install ${service} ${env.GITOPS_DIR}/charts/${service} \
                                   -n ${env.TEST_NAMESPACE} --create-namespace \
+                                  -f ${env.GITOPS_DIR}/environments/test/values-shared.yaml \
                                   --set service.type=NodePort
                             """
                         } else {
@@ -295,9 +327,11 @@ pipeline {
                             def exposeNodePort = (tag != 'main') || SERVICE_IMAGE_KEY_MAP.containsKey(service)
 
                             sh """
-                                helm dependency build k8s/charts/${service}
-                                helm upgrade --install ${service} k8s/charts/${service} \
+                                helm dependency build ${env.GITOPS_DIR}/charts/${service}
+                                helm upgrade --install ${service} ${env.GITOPS_DIR}/charts/${service} \
                                   -n ${env.TEST_NAMESPACE} --create-namespace \
+                                  -f ${env.GITOPS_DIR}/environments/test/values-shared.yaml \
+                                  -f ${env.GITOPS_DIR}/environments/test/services/${service}.yaml \
                                   --set ${imageKey}.image.repository=${imageRepository} \
                                   --set ${imageKey}.image.tag=${tag} \
                                   --set ${imageKey}.image.pullPolicy=Always \
