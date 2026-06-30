@@ -4,22 +4,17 @@ def SERVICE_PARAM_MAP = [
     order           : 'TAG_ORDER',
     product         : 'TAG_PRODUCT',
     media           : 'TAG_MEDIA',
-    rating          : 'TAG_RATING',
     customer        : 'TAG_CUSTOMER',
-    location        : 'TAG_LOCATION',
     inventory       : 'TAG_INVENTORY',
     search          : 'TAG_SEARCH',
-    payment         : 'TAG_PAYMENT',
-    'payment-paypal': 'TAG_PAYMENT_PAYPAL',
-    promotion       : 'TAG_PROMOTION',
-    recommendation  : 'TAG_RECOMMENDATION',
     sampledata      : 'TAG_SAMPLEDATA',
-    webhook         : 'TAG_WEBHOOK',
     'backoffice-bff': 'TAG_BACKOFFICE_BFF',
     'storefront-bff': 'TAG_STOREFRONT_BFF',
     'backoffice-ui' : 'TAG_BACKOFFICE_UI',
     'storefront-ui' : 'TAG_STOREFRONT_UI'
 ]
+
+def STATIC_CHART_SERVICES = ['swagger-ui']
 
 def SERVICE_IMAGE_KEY_MAP = [
     'backoffice-ui': 'ui',
@@ -31,7 +26,7 @@ def SERVICE_IMAGE_REPOSITORY_MAP = [
     'storefront-ui' : 'yas-storefront'
 ]
 
-def FRONTEND_SERVICES = ['storefront-ui', 'backoffice-ui']
+def FRONTEND_SERVICES = ['storefront-ui', 'backoffice-ui', 'swagger-ui']
 def RESOLVED_BRANCH_BY_SERVICE = [:]
 def RESOLVED_TAG_BY_SERVICE = [:]
 def NON_MAIN_SERVICES = []
@@ -135,17 +130,10 @@ pipeline {
         string(name: 'TAG_ORDER', defaultValue: 'main', description: 'Branch name for order')
         string(name: 'TAG_PRODUCT', defaultValue: 'main', description: 'Branch name for product')
         string(name: 'TAG_MEDIA', defaultValue: 'main', description: 'Branch name for media')
-        string(name: 'TAG_RATING', defaultValue: 'main', description: 'Branch name for rating')
         string(name: 'TAG_CUSTOMER', defaultValue: 'main', description: 'Branch name for customer')
-        string(name: 'TAG_LOCATION', defaultValue: 'main', description: 'Branch name for location')
         string(name: 'TAG_INVENTORY', defaultValue: 'main', description: 'Branch name for inventory')
         string(name: 'TAG_SEARCH', defaultValue: 'main', description: 'Branch name for search')
-        string(name: 'TAG_PAYMENT', defaultValue: 'main', description: 'Branch name for payment')
-        string(name: 'TAG_PAYMENT_PAYPAL', defaultValue: 'main', description: 'Branch name for payment-paypal')
-        string(name: 'TAG_PROMOTION', defaultValue: 'main', description: 'Branch name for promotion')
-        string(name: 'TAG_RECOMMENDATION', defaultValue: 'main', description: 'Branch name for recommendation')
         string(name: 'TAG_SAMPLEDATA', defaultValue: 'main', description: 'Branch name for sampledata')
-        string(name: 'TAG_WEBHOOK', defaultValue: 'main', description: 'Branch name for webhook')
         string(name: 'TAG_BACKOFFICE_BFF', defaultValue: 'main', description: 'Branch name for backoffice-bff')
         string(name: 'TAG_STOREFRONT_BFF', defaultValue: 'main', description: 'Branch name for storefront-bff')
         string(name: 'TAG_BACKOFFICE_UI', defaultValue: 'main', description: 'Branch name for backoffice-ui')
@@ -263,23 +251,36 @@ pipeline {
                         returnStdout: true
                     ).trim()
 
-                    SERVICE_PARAM_MAP.each { service, _ ->
-                        def tag = RESOLVED_TAG_BY_SERVICE[service]
-                        def imageKey = SERVICE_IMAGE_KEY_MAP.get(service, 'backend')
-                        def imageName = SERVICE_IMAGE_REPOSITORY_MAP.get(service, "yas-${service}")
-                        def imageRepository = "${env.DOCKERHUB_NAMESPACE}/${imageName}"
-                        def exposeNodePort = (tag != 'main') || SERVICE_IMAGE_KEY_MAP.containsKey(service)
+                    def servicesToDeploy = []
+                    servicesToDeploy.addAll(SERVICE_PARAM_MAP.keySet())
+                    servicesToDeploy.addAll(STATIC_CHART_SERVICES)
 
-                        sh """
-                            helm dependency build k8s/charts/${service}
-                            helm upgrade --install ${service} k8s/charts/${service} \
-                              -n ${env.TEST_NAMESPACE} --create-namespace \
-                              --set ${imageKey}.image.repository=${imageRepository} \
-                              --set ${imageKey}.image.tag=${tag} \
-                              --set ${imageKey}.image.pullPolicy=Always \
-                              --set global.keycloakInternalIP=${keycloakClusterIp} \
-                              --set global.identityDomain=identity.yas.local.com ${exposeNodePort ? "--set ${imageKey}.service.type=NodePort" : ''}
-                        """
+                    servicesToDeploy.each { service ->
+                        if (STATIC_CHART_SERVICES.contains(service)) {
+                            sh """
+                                helm dependency build k8s/charts/${service}
+                                helm upgrade --install ${service} k8s/charts/${service} \
+                                  -n ${env.TEST_NAMESPACE} --create-namespace \
+                                  --set service.type=NodePort
+                            """
+                        } else {
+                            def tag = RESOLVED_TAG_BY_SERVICE[service]
+                            def imageKey = SERVICE_IMAGE_KEY_MAP.get(service, 'backend')
+                            def imageName = SERVICE_IMAGE_REPOSITORY_MAP.get(service, "yas-${service}")
+                            def imageRepository = "${env.DOCKERHUB_NAMESPACE}/${imageName}"
+                            def exposeNodePort = (tag != 'main') || SERVICE_IMAGE_KEY_MAP.containsKey(service)
+
+                            sh """
+                                helm dependency build k8s/charts/${service}
+                                helm upgrade --install ${service} k8s/charts/${service} \
+                                  -n ${env.TEST_NAMESPACE} --create-namespace \
+                                  --set ${imageKey}.image.repository=${imageRepository} \
+                                  --set ${imageKey}.image.tag=${tag} \
+                                  --set ${imageKey}.image.pullPolicy=Always \
+                                  --set global.keycloakInternalIP=${keycloakClusterIp} \
+                                  --set global.identityDomain=identity.yas.local.com ${exposeNodePort ? "--set ${imageKey}.service.type=NodePort" : ''}
+                            """
+                        }
                     }
                 }
             }

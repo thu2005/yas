@@ -29,11 +29,41 @@ Suggested parameters:
 6. Jenkins prints the access URL in the form `http://<worker-ip>:<nodeport>`.
 7. After testing, the `developer_destroy` job deletes the test namespace.
 
+## Service Scope
+
+The developer CD job deploys the services required for the e-commerce and service mesh demo:
+
+```text
+product
+cart
+order
+customer
+inventory
+tax
+media
+search
+storefront-bff
+storefront-ui
+backoffice-bff
+backoffice-ui
+swagger-ui
+sampledata
+```
+
+`sampledata` is used to seed demo data and can be stopped after the initial data load. `swagger-ui` uses the public `swaggerapi/swagger-ui` image; the other source-built services use Docker Hub images under the `thu2005` namespace.
+
 ## Prerequisites
 
 - Jenkins credential `dockerhub-credentials` must use the Docker Hub username and an access token/password that can push to the `thu2005` namespace.
-- Before the first developer deploy, build and push the baseline `main` images needed by the environment, for example `thu2005/yas-tax:main` and the other services that will be deployed with the default tag.
+- Before the first developer deploy, build and push the baseline `main` images for the source-built services in the service scope, for example `thu2005/yas-tax:main`.
 - The Jenkins agent must have `git`, `docker`, `kubectl`, and `helm` available, and it must point to the Kubernetes cluster used for the demo.
+
+To bootstrap the baseline images from a local machine or Jenkins agent:
+
+```bash
+docker login
+DOCKERHUB_NAMESPACE=thu2005 IMAGE_TAG=main ./scripts/build-cd-baseline-images.sh
+```
 
 ## Host file setup
 
