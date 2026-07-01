@@ -1,4 +1,5 @@
-apiVersion: kafka.strimzi.io/v1beta2
+{{- if .Values.debeziumConnect.enabled }}
+apiVersion: kafka.strimzi.io/v1
 kind: KafkaConnect
 metadata:
   name: debezium-connect-cluster
@@ -31,3 +32,4 @@ spec:
           - type: tgz
             url: https://repo1.maven.org/maven2/io/debezium/debezium-connector-postgres/2.3.0.Final/debezium-connector-postgres-2.3.0.Final-plugin.tar.gz
   {{- end }}
+{{- end }}
