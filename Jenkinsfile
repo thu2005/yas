@@ -68,6 +68,10 @@ def computeChangedFiles() {
     if (env.CHANGE_TARGET) {
         // Pull request: compare current branch with target branch
         cmd = "git diff --name-only origin/${env.CHANGE_TARGET}...HEAD"
+    } else if (env.BRANCH_NAME && env.BRANCH_NAME != 'main' && env.BRANCH_NAME != env.CI_BASE_BRANCH) {
+        // Feature branch builds should test the complete branch delta. This also
+        // avoids shallow first-build diffs that make the whole repository changed.
+        cmd = "git diff --name-only origin/${env.CI_BASE_BRANCH}...HEAD"
     } else if (env.GIT_PREVIOUS_SUCCESSFUL_COMMIT && env.GIT_COMMIT) {
         // Regular push: compare with last successful commit
         cmd = "git diff --name-only ${env.GIT_PREVIOUS_SUCCESSFUL_COMMIT}..${env.GIT_COMMIT}"
@@ -121,6 +125,7 @@ pipeline {
         GITOPS_COMMIT_EMAIL = 'jenkins@local'
         GITOPS_DEV_DIR = 'environments/dev/services'
         GITOPS_STAGING_DIR = 'environments/staging/services'
+        CI_BASE_BRANCH = 'devops-cd'
     }
 
     stages {
@@ -141,6 +146,8 @@ pipeline {
                         // For PRs: fetch the target branch so git diff works correctly
                         if (env.CHANGE_TARGET) {
                             sh "git fetch --no-tags origin ${env.CHANGE_TARGET}"
+                        } else if (env.BRANCH_NAME && env.BRANCH_NAME != 'main' && env.BRANCH_NAME != env.CI_BASE_BRANCH) {
+                            sh "git fetch --no-tags --depth=50 origin ${env.CI_BASE_BRANCH}:refs/remotes/origin/${env.CI_BASE_BRANCH}"
                         }
                     }
                 }
