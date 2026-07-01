@@ -146,8 +146,6 @@ pipeline {
                         // For PRs: fetch the target branch so git diff works correctly
                         if (env.CHANGE_TARGET) {
                             sh "git fetch --no-tags origin ${env.CHANGE_TARGET}"
-                        } else if (env.BRANCH_NAME && env.BRANCH_NAME != 'main' && env.BRANCH_NAME != env.CI_BASE_BRANCH) {
-                            sh "git fetch --no-tags --depth=50 origin ${env.CI_BASE_BRANCH}:refs/remotes/origin/${env.CI_BASE_BRANCH}"
                         }
                     }
                 }
