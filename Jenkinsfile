@@ -69,9 +69,9 @@ def computeChangedFiles() {
         // Pull request: compare current branch with target branch
         cmd = "git diff --name-only origin/${env.CHANGE_TARGET}...HEAD"
     } else if (env.BRANCH_NAME && env.BRANCH_NAME != 'main' && env.BRANCH_NAME != env.CI_BASE_BRANCH) {
-        // Feature branch builds should test the complete branch delta. This also
-        // avoids shallow first-build diffs that make the whole repository changed.
-        cmd = "git diff --name-only origin/${env.CI_BASE_BRANCH}...HEAD"
+        // Feature branch builds should test the complete branch delta. Use two-dot
+        // because Jenkins shallow checkouts may not have enough history for merge-base.
+        cmd = "git diff --name-only origin/${env.CI_BASE_BRANCH}..HEAD"
     } else if (env.GIT_PREVIOUS_SUCCESSFUL_COMMIT && env.GIT_COMMIT) {
         // Regular push: compare with last successful commit
         cmd = "git diff --name-only ${env.GIT_PREVIOUS_SUCCESSFUL_COMMIT}..${env.GIT_COMMIT}"
