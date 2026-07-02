@@ -160,9 +160,72 @@ kubectl get applications -n argocd
 # yas-staging → Synced
 ```
 
-### Ưu tiên 5 — Istio/Kiali (nâng cao)
+---
 
-Xem file `docs/demo-guide.md` phần Istio (chưa viết, cần bổ sung sau khi cài).
+## Phần nâng cao — Istio + Service Mesh (giao bạn khác)
+
+> Phần này tính 2đ nâng cao. Cluster đã sẵn sàng, chỉ cần cài thêm.
+
+### Bước 1 — Cài Istio
+
+```bash
+# Tải istioctl về máy
+curl -L https://istio.io/downloadIstio | sh -
+cd istio-*/bin && export PATH=$PWD:$PATH
+
+# Cài vào GKE cluster
+istioctl install --set profile=demo -y
+
+# Enable injection cho yas-dev
+kubectl label namespace yas-dev istio-injection=enabled
+kubectl rollout restart deployment -n yas-dev
+```
+
+### Bước 2 — Apply mTLS STRICT
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: yas-dev
+spec:
+  mtls:
+    mode: STRICT
+EOF
+```
+
+### Bước 3 — Apply AuthorizationPolicy (ví dụ)
+
+```bash
+# Cho phép storefront-bff gọi product
+kubectl apply -f - <<EOF
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-storefront-bff-to-product
+  namespace: yas-dev
+spec:
+  selector:
+    matchLabels:
+      app: product
+  rules:
+    - from:
+        - source:
+            principals: ["cluster.local/ns/yas-dev/sa/storefront-bff"]
+EOF
+```
+
+### Bước 4 — Cài Kiali
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/kiali.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/prometheus.yaml
+istioctl dashboard kiali
+```
+
+Chụp topology screenshot, ghi log curl allow/deny vào `docs/`.
 
 ---
 

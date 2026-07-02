@@ -248,13 +248,32 @@ kubectl apply -f https://raw.githubusercontent.com/keycloak/keycloak-k8s-resourc
 
 helm upgrade --install keycloak ./keycloak/keycloak \
   --namespace keycloak \
-  --set hostname=identity.yas.local.com \
+  --set hostname=identity \
   --set postgresql.username=yasadminuser \
   --set postgresql.password=admin \
   --set bootstrapAdmin.username=admin \
   --set bootstrapAdmin.password=admin \
   --set backofficeRedirectUrl=http://backoffice.yas.local.com \
   --set storefrontRedirectUrl=http://storefront.yas.local.com
+```
+
+**Quan trọng:** `hostname=identity` (không dùng `identity.yas.local.com`). BFF kết nối Keycloak qua `http://identity/realms/Yas`, nên Keycloak phải trả về issuer khớp với hostname đó. Nếu set sai hostname, BFF crash với lỗi "Issuer did not match".
+
+Sau khi cài Keycloak, tạo ExternalName service để pods trong `yas-dev` resolve được tên `identity`:
+```bash
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Service
+metadata:
+  name: identity
+  namespace: yas-dev
+spec:
+  type: ExternalName
+  externalName: keycloak-service.keycloak.svc.cluster.local
+  ports:
+    - port: 80
+      targetPort: 80
+EOF
 ```
 
 ---

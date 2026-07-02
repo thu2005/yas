@@ -86,9 +86,9 @@ GKE cluster (GCP project: yas-devops-project2, zone: us-east1-b)
 | inventory       | ✅ Running       |                                                    |
 | media           | ✅ Running       |                                                    |
 | tax             | ✅ Running       | ← service đang demo                                |
-| storefront-bff  | ✅ Running       | Fix: tạo ExternalName svc `identity` → Keycloak    |
-| backoffice-bff  | ✅ Running       | Fix: tạo ExternalName svc `identity` → Keycloak    |
-| search          | ✅ Running       | Fix: thêm ES env vars trong values.yaml             |
+| storefront-bff  | ✅ Running       | Fix: ExternalName svc `identity` + Keycloak hostname=identity |
+| backoffice-bff  | ✅ Running       | Fix: ExternalName svc `identity` + Keycloak hostname=identity |
+| search          | ✅ Running       | Fix: ELASTICSEARCH_URL env var trong values.yaml    |
 
 ### Repos và jobs
 
@@ -97,20 +97,84 @@ GKE cluster (GCP project: yas-devops-project2, zone: us-east1-b)
 - Jenkins job `developer_build` — chạy thành công.
 - Jenkins job `developer_build_cleanup` — Jenkinsfile sẵn sàng, chưa test.
 
-## 4. Việc còn lại 
+## 4. Việc còn lại
 
-### Sau khi tất cả pods Running
+### Mình tự làm (theo thứ tự)
 
-1. Lấy GKE node external IP → ghi vào file `hosts` của máy dev để test.
-2. Test Jenkins cleanup job.
-3. Chụp evidence cho báo cáo (xem `demo-guide.md`).
-4. Deploy staging, test flow merge main→staging.
+**1. Lấy IP node GKE và test truy cập YAS từ browser**
 
-### Nâng cao 
+```bash
+kubectl get nodes -o wide
+# lấy cột EXTERNAL-IP
+```
 
-1. Cài Istio + Kiali.
-2. Apply mTLS, AuthorizationPolicy, retry VirtualService.
-3. Chụp Kiali topology.
+Thêm vào file `hosts` của máy (Windows: `C:\Windows\System32\drivers\etc\hosts`):
+```
+<external-ip>  identity.yas.local.com
+<external-ip>  storefront.yas.local.com
+<external-ip>  backoffice.yas.local.com
+```
+
+Truy cập thử:
+- `http://<external-ip>:30001` → storefront
+- `http://<external-ip>:30003` → backoffice
+- `http://<external-ip>:30014` → swagger-ui
+
+**2. Test Jenkins cleanup job**
+
+Vào Jenkins → `developer_build_cleanup` → Build with Parameters:
+- `RESET_TAX = true`, `DRY_RUN = false`, `CONFIRM = true`
+
+Kiểm tra: `gitops-yas/helm/yas/values-dev.yaml` → `tax.image.tag` phải về `main`.
+
+**3. Test staging flow**
+
+```bash
+cd ~/project2/gitops-yas
+git checkout staging
+git merge main
+git push origin staging
+```
+
+Argo CD sẽ tự sync `yas-staging`. Kiểm tra:
+```bash
+kubectl get applications -n argocd
+# yas-staging → Synced + Healthy
+```
+
+**4. Chụp evidence cho báo cáo**
+
+Xem checklist đầy đủ ở `docs/demo-guide.md`. Những screenshot còn thiếu:
+- `kubectl get pods -n yas-dev` — tất cả Running
+- `kubectl get applications -n argocd` — Synced + Healthy
+- Truy cập được storefront/backoffice trên browser
+- `kubectl describe pod tax-... | grep Image` — đúng tag `2094d996`
+
+### Giao cho các bạn khác — Service Mesh (2đ nâng cao)
+
+Phần Istio + Kiali cần người khác phụ trách. Xem `docs/team-onboarding.md` để biết cách kết nối vào cluster.
+
+Công việc cần làm:
+1. Cài Istio vào GKE cluster (istioctl hoặc Helm)
+2. Enable injection cho namespace `yas-dev`
+3. Apply `PeerAuthentication` STRICT mTLS
+4. Apply `AuthorizationPolicy` (whitelist traffic giữa services)
+5. Apply `VirtualService` với retry + timeout cho một số route
+6. Cài Kiali, chụp topology screenshot
+7. Test: curl allow/deny, ghi log vào `docs/`
+
+## 5. Phân công
+
+| Việc | Người |
+|---|---|
+| CI pipeline (Jenkins) | ✅ Xong |
+| CD developer_build (Jenkins + GitOps) | ✅ Xong |
+| GKE + Argo CD | ✅ Xong |
+| Infrastructure (PG, Kafka, Redis, ES, Keycloak) | ✅ Xong |
+| 14/14 YAS pods Running | ✅ Xong |
+| Test NodePort, cleanup job, staging flow | Bạn đang làm |
+| Chụp evidence báo cáo | Bạn đang làm |
+| Istio + Kiali + Service Mesh (2đ nâng cao) | Giao bạn khác |
 
 ## 6. Quy tắc
 
