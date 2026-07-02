@@ -32,11 +32,55 @@ spec:
     - match:
         - authority:
             exact: storefront.yas.local
+          uri:
+            prefix: /api
+        - authority:
+            exact: storefront.yas.local
+          uri:
+            prefix: /oauth2
+        - authority:
+            exact: storefront.yas.local
+          uri:
+            prefix: /login
+        - authority:
+            exact: storefront.yas.local
+          uri:
+            prefix: /logout
+      route:
+        - destination:
+            host: storefront-bff.yas-dev.svc.cluster.local
+            port:
+              number: 80
+    - match:
+        - authority:
+            exact: storefront.yas.local
       route:
         - destination:
             host: storefront-ui.yas-dev.svc.cluster.local
             port:
               number: 3000
+    - match:
+        - authority:
+            exact: backoffice.yas.local
+          uri:
+            prefix: /api
+        - authority:
+            exact: backoffice.yas.local
+          uri:
+            prefix: /oauth2
+        - authority:
+            exact: backoffice.yas.local
+          uri:
+            prefix: /login
+        - authority:
+            exact: backoffice.yas.local
+          uri:
+            prefix: /logout
+      route:
+        - destination:
+            host: backoffice-bff.yas-dev.svc.cluster.local
+            port:
+              number: 80
     - match:
         - authority:
             exact: backoffice.yas.local
