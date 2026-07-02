@@ -53,7 +53,8 @@ GKE cluster (GCP project: yas-devops-project2, zone: us-east1-b)
 ### Nâng cao (2đ — Service Mesh)
 
 - [x] Istio mTLS (PeerAuthentication STRICT).
-- [ ] Istio AuthorizationPolicy.
+- [x] Istio AuthorizationPolicy cho ingressgateway truy cập storefront/backoffice/swagger UI.
+- [x] Istio Gateway + VirtualService cho storefront/backoffice/swagger qua `*.yas.local`.
 - [ ] Istio retry/timeout (VirtualService).
 - [ ] Kiali topology screenshot.
 - [ ] Test plan và log curl allow/deny/retry.
@@ -152,16 +153,16 @@ Xem checklist đầy đủ ở `docs/demo-guide.md`. Những screenshot còn thi
 
 ### Giao cho các bạn khác — Service Mesh (2đ nâng cao)
 
-Phần Istio + Kiali cần người khác phụ trách. Xem `docs/team-onboarding.md` để biết cách kết nối vào cluster.
+Phần Istio đã làm một phần: mTLS STRICT, Gateway/VirtualService cho web UI và AuthorizationPolicy cho ingressgateway. Phần còn lại là retry/timeout, Kiali và evidence allow/deny/retry. Xem `docs/team-onboarding.md` để biết cách kết nối vào cluster.
 
 Công việc cần làm:
-1. Cài Istio vào GKE cluster (istioctl hoặc Helm)
-2. Enable injection cho namespace `yas-dev`
-3. Apply `PeerAuthentication` STRICT mTLS
-4. Apply `AuthorizationPolicy` (whitelist traffic giữa services)
-5. Apply `VirtualService` với retry + timeout cho một số route
+1. Cài/kiểm tra Istio trong GKE cluster (istioctl hoặc Helm)
+2. Kiểm tra sidecar injection cho namespace `yas-dev`
+3. Kiểm tra `PeerAuthentication` STRICT mTLS
+4. Bổ sung `AuthorizationPolicy` whitelist traffic giữa backend services nếu chưa có trong GitOps
+5. Apply `VirtualService` với retry + timeout cho một số route backend
 6. Cài Kiali, chụp topology screenshot
-7. Test: curl allow/deny, ghi log vào `docs/`
+7. Test: curl allow/deny/retry, ghi log vào `docs/`
 
 ## 5. Phân công
 
