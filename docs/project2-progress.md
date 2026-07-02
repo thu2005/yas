@@ -52,7 +52,7 @@ GKE cluster (GCP project: yas-devops-project2, zone: us-east1-b)
 
 ### Nâng cao (2đ — Service Mesh)
 
-- [ ] Istio mTLS (PeerAuthentication STRICT).
+- [x] Istio mTLS (PeerAuthentication STRICT).
 - [ ] Istio AuthorizationPolicy.
 - [ ] Istio retry/timeout (VirtualService).
 - [ ] Kiali topology screenshot.
