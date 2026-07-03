@@ -187,19 +187,22 @@ Theo `docs/project2-progress.md`, phần còn lại:
 - Cần test flow merge/promote từ `main` sang `staging` trong repo GitOps.
 - Cần evidence `kubectl get applications -n argocd` cho cả `yas-dev` và `yas-staging`.
 
-### 3.5. Service Mesh chưa được implement trong repo
+### 3.5. Trạng thái Service Mesh (Phần Nâng cao 2đ)
 
-Hiện chưa có thư mục `k8s/istio`.
+Toàn bộ manifest cấu hình Service Mesh đã được implement chuẩn xác theo đề bài vào thư mục `helm/yas/templates/istio/` của GitOps repo, bao gồm:
 
-`docs/implementation_plan.md` đã có kế hoạch chi tiết, nhưng chưa có manifest/script thực tế:
+- `PeerAuthentication` (mode: STRICT) để bắt buộc mTLS trong toàn namespace.
+- `DestinationRule` cấu hình mTLS (ISTIO_MUTUAL) cho các service nội bộ và ngoại lệ (DISABLE) khi gọi ra hạ tầng bên ngoài (Postgres, Kafka, Redis, Elasticsearch, Keycloak).
+- `AuthorizationPolicy` thiết lập chính sách kết nối (chỉ những service được cấp quyền mới được gọi nhau). Đã map chuẩn cho 14 pod.
+- `VirtualService` định nghĩa retry policy (thử lại tự động 3 lần khi lỗi 5xx) cho `tax` và `product`.
+- `Gateway` và `VirtualService` để Expose các trang UI ra ngoài.
 
-- `PeerAuthentication` mTLS STRICT.
-- `DestinationRule` mTLS và ngoại lệ cho infra ngoài mesh.
-- `AuthorizationPolicy` allow/deny.
-- `VirtualService` retry/timeout.
-- Script cài Istio/Kiali.
-- Script test allow/deny/retry.
-- Evidence Kiali topology.
+**Các bước cần làm tiếp theo để hoàn thiện báo cáo (Theo đúng Yêu cầu 2 và 3 của đề bài):**
+1. Cài đặt Kiali (sử dụng helm hoặc istioctl) vào cluster. Chạy các request trên trang web để tạo traffic, sau đó vào Kiali chụp lại Flow chart/Topology.
+2. Viết kịch bản test và chụp màn hình bằng lệnh `curl` (Ví dụ: `kubectl exec -n yas-dev <pod-a> -- curl -v http://<pod-b>.<ns>:80/`):
+   - Test allow: Curl từ `order` sang `cart` (Kỳ vọng: 200 OK).
+   - Test deny: Curl từ pod không được phép sang `cart` (Kỳ vọng: 403 RBAC Access Denied).
+   - Test retry: Curl tới `tax` service khi service này bị lỗi để thấy log Istio proxy tự động retry.
 
 ### 3.6. Một số tài liệu có thể bị lỗi thời
 

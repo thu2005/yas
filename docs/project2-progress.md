@@ -55,7 +55,7 @@ GKE cluster (GCP project: yas-devops-project2, zone: us-east1-b)
 - [x] Istio mTLS (PeerAuthentication STRICT).
 - [x] Istio AuthorizationPolicy cho ingressgateway truy cập storefront/backoffice/swagger UI.
 - [x] Istio Gateway + VirtualService cho storefront/backoffice/swagger qua `*.yas.local`.
-- [ ] Istio retry/timeout (VirtualService).
+- [x] Istio retry/timeout (VirtualService).
 - [ ] Kiali topology screenshot.
 - [ ] Test plan và log curl allow/deny/retry.
 
@@ -80,16 +80,16 @@ GKE cluster (GCP project: yas-devops-project2, zone: us-east1-b)
 | backoffice-ui   | ✅ Running       |                                                    |
 | swagger-ui      | ✅ Running       |                                                    |
 | sampledata      | ✅ Running       |                                                    |
-| cart            | ✅ Running       |                                                    |
-| order           | ✅ Running       |                                                    |
+| cart            | ✅ Running       | Đã fix lỗi 403 AuthorizationPolicy khi thêm vào giỏ hàng           |
+| order           | ✅ Running       | Đã fix lỗi code (Jackson `ProductCheckoutListVm`) ở máy local. Chờ push code để tự động build lại |
 | product         | ✅ Running       |                                                    |
 | customer        | ✅ Running       |                                                    |
 | inventory       | ✅ Running       |                                                    |
-| media           | ✅ Running       |                                                    |
-| tax             | ✅ Running       | ← service đang demo                                |
-| storefront-bff  | ✅ Running       | Fix: ExternalName svc `identity` + Keycloak hostname=identity |
-| backoffice-bff  | ✅ Running       | Fix: ExternalName svc `identity` + Keycloak hostname=identity |
-| search          | ✅ Running       | Fix: ELASTICSEARCH_URL env var trong values.yaml    |
+| media           | ✅ Running       | Đã fix lỗi 403 AuthorizationPolicy để tải hình ảnh                  |
+| tax             | ✅ Running       | Đã fix mTLS & Retry policy (3 lần) thành công                      |
+| storefront-bff  | ✅ Running       | Fix: ExternalName svc `identity` + Keycloak hostname=identity      |
+| backoffice-bff  | ✅ Running       | Fix: ExternalName svc `identity` + Keycloak hostname=identity      |
+| search          | ✅ Running       | Lưu ý: Trống dữ liệu do Kafka Debezium CrashLoopBackOff (sai Image). Service vẫn chạy bình thường. |
 
 ### Repos và jobs
 
@@ -110,16 +110,17 @@ kubectl get nodes -o wide
 ```
 
 Thêm vào file `hosts` của máy (Windows: `C:\Windows\System32\drivers\etc\hosts`):
-```
-<external-ip>  identity.yas.local.com
-<external-ip>  storefront.yas.local.com
-<external-ip>  backoffice.yas.local.com
+```text
+<external-ip>  identity.yas.local
+<external-ip>  storefront.yas.local
+<external-ip>  backoffice.yas.local
+<external-ip>  swagger.yas.local
 ```
 
-Truy cập thử:
-- `http://<external-ip>:30001` → storefront
-- `http://<external-ip>:30003` → backoffice
-- `http://<external-ip>:30014` → swagger-ui
+Truy cập thử qua Istio IngressGateway (cần port HTTP của gateway, ví dụ 80 hoặc NodePort tương ứng):
+- `http://storefront.yas.local` (hoặc kèm port) → storefront
+- `http://backoffice.yas.local` (hoặc kèm port) → backoffice
+- `http://swagger.yas.local` (hoặc kèm port) → swagger-ui
 
 **2. Test Jenkins cleanup job**
 
@@ -151,18 +152,13 @@ Xem checklist đầy đủ ở `docs/demo-guide.md`. Những screenshot còn thi
 - Truy cập được storefront/backoffice trên browser
 - `kubectl describe pod tax-... | grep Image` — đúng tag `2094d996`
 
-### Giao cho các bạn khác — Service Mesh (2đ nâng cao)
+### Giao cho các bạn khác — Evidence Service Mesh (2đ nâng cao)
 
-Phần Istio đã làm một phần: mTLS STRICT, Gateway/VirtualService cho web UI và AuthorizationPolicy cho ingressgateway. Phần còn lại là retry/timeout, Kiali và evidence allow/deny/retry. Xem `docs/team-onboarding.md` để biết cách kết nối vào cluster.
+Phần Istio đã được cấu hình gần như 100% trong GitOps: mTLS STRICT, Gateway/VirtualService cho web UI, AuthorizationPolicy cho 14 backend services, VirtualService retry/timeout cho tax/product. Xem `docs/team-onboarding.md` để biết cách kết nối vào cluster.
 
-Công việc cần làm:
-1. Cài/kiểm tra Istio trong GKE cluster (istioctl hoặc Helm)
-2. Kiểm tra sidecar injection cho namespace `yas-dev`
-3. Kiểm tra `PeerAuthentication` STRICT mTLS
-4. Bổ sung `AuthorizationPolicy` whitelist traffic giữa backend services nếu chưa có trong GitOps
-5. Apply `VirtualService` với retry + timeout cho một số route backend
-6. Cài Kiali, chụp topology screenshot
-7. Test: curl allow/deny/retry, ghi log vào `docs/`
+Công việc cần làm để quay video/chụp ảnh báo cáo:
+1. Cài Kiali, chụp topology screenshot
+2. Test: curl allow/deny/retry, ghi log vào `docs/`
 
 ## 5. Phân công
 
@@ -175,7 +171,8 @@ Công việc cần làm:
 | 14/14 YAS pods Running | ✅ Xong |
 | Test NodePort, cleanup job, staging flow | Bạn đang làm |
 | Chụp evidence báo cáo | Bạn đang làm |
-| Istio + Kiali + Service Mesh (2đ nâng cao) | Giao bạn khác |
+| Istio Service Mesh (AuthPolicy, VirtualService retry) | ✅ Xong |
+| Quay video/chụp Kiali + test curl Istio | Giao bạn khác |
 
 ## 6. Quy tắc
 
