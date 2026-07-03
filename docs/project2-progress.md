@@ -180,3 +180,36 @@ Công việc cần làm để quay video/chụp ảnh báo cáo:
 - Jenkins chạy trên máy local, workload YAS/Argo chạy trên GKE.
 - Không để GKE cluster chạy qua đêm không cần thiết (tốn GCP credit).
 - `docs/` chỉ ghi roadmap, không ghi log debug chi tiết.
+
+## 7. Fix Flow Order & Search
+
+**Nguyên nhân lỗi:** Backoffice không hiển thị Order và Storefront tìm kiếm không ra Product do luồng đồng bộ sự kiện (Kafka/Debezium) bị đứt gãy. Pod `debezium-connect` chết (CrashLoopBackOff) do image `debezium/connect:2.7.3.Final` không tương thích với script khởi động của Strimzi Kafka Operator.
+
+**Cách xử lý:** Cần build một image Debezium mới tương thích với Strimzi và cập nhật vào cấu hình GitOps.
+
+**Bước 1: Tạo Dockerfile chuẩn Strimzi**
+Tại thư mục `yas/debezium` (tạo mới), tạo `Dockerfile`:
+```dockerfile
+FROM quay.io/strimzi/kafka:0.39.0-kafka-3.6.0
+USER root:root
+RUN mkdir -p /opt/kafka/plugins/debezium
+RUN curl -L -o /tmp/debezium.tar.gz https://repo1.maven.org/maven2/io/debezium/debezium-connector-postgres/2.7.3.Final/debezium-connector-postgres-2.7.3.Final-plugin.tar.gz
+RUN tar -xzf /tmp/debezium.tar.gz -C /opt/kafka/plugins/debezium --strip-components=1
+RUN rm /tmp/debezium.tar.gz
+USER 1001
+```
+
+**Bước 2: Build và Push Image lên Docker Hub**
+```bash
+docker build -t thu2005/yas-debezium-connect:latest ./debezium
+docker push thu2005/yas-debezium-connect:latest
+```
+
+**Bước 3: Cập nhật cấu hình GitOps**
+Trong repo `gitops-yas`, sửa `helm/yas/values-dev.yaml`:
+```yaml
+debeziumConnect:
+  enabled: true
+  image: "thu2005/yas-debezium-connect:latest"
+```
+Commit và push lên nhánh `main`. Argo CD sẽ tự động cập nhật, pod Debezium sẽ khởi động thành công và luồng đồng bộ dữ liệu Kafka sẽ hoạt động trở lại.
