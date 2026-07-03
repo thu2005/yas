@@ -51,6 +51,9 @@ for entry in "${DOCKER_BUILDS[@]}"; do
   image="${DOCKERHUB_NAMESPACE}/${image_name}:${IMAGE_TAG}"
 
   printf 'Building %s -> %s\n' "$display_name" "$image"
+  if [ "$image_name" == "yas-media" ]; then
+    cp -r "$REPO_ROOT/sampledata/images" "$context/images"
+  fi
   docker build -t "$image" "$context"
   docker push "$image"
 done

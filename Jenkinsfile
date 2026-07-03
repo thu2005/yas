@@ -217,12 +217,15 @@ pipeline {
 
                         dockerServices.each { service ->
                             withEnv(["SERVICE_NAME=${service}", "IMAGE_TAG=${imageTag}"]) {
-                                sh '''
-                                    IMAGE="${DOCKERHUB_NAMESPACE}/yas-${SERVICE_NAME}:${IMAGE_TAG}"
-                                    echo "Building ${IMAGE}"
-                                    docker build --pull -t "${IMAGE}" "${SERVICE_NAME}"
-                                    docker push "${IMAGE}"
-                                '''
+                                  sh '''
+                                      IMAGE="${DOCKERHUB_NAMESPACE}/yas-${SERVICE_NAME}:${IMAGE_TAG}"
+                                      echo "Building ${IMAGE}"
+                                      if [ "${SERVICE_NAME}" = "media" ]; then
+                                          cp -r sampledata/images media/images
+                                      fi
+                                      docker build --pull -t "${IMAGE}" "${SERVICE_NAME}"
+                                      docker push "${IMAGE}"
+                                  '''
                             }
                         }
 
