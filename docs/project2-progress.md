@@ -40,15 +40,19 @@ GKE cluster (GCP project: yas-devops-project2, zone: us-east1-b)
 - [x] Fix backoffice-bff và storefront-bff (ExternalName service `identity`).
 - [x] search pod Running (ES env vars trong values.yaml, Argo CD sync).
 - [x] 14/14 pods Running ổn định.
-- [ ] In URL NodePort cho developer test (cần GKE node external IP).
-- [ ] Tạo và test Jenkins cleanup job.
+- [x] Truy cập web qua Istio Gateway với domain `*.yas.local`.
+- [x] Storefront checkout flow tạo order thành công.
+- [x] Backoffice load được dashboard và order mới sau checkout.
+- [ ] Payment PayPal capture success: chưa demo được do PayPal sandbox yêu cầu OTP số điện thoại.
+- [ ] In URL NodePort cho developer test (không ưu tiên nữa vì đang dùng Istio Gateway domain).
+- [x] Tạo và test Jenkins cleanup job.
 - [ ] Có evidence đầy đủ cho báo cáo.
 
 ### Nâng cao (2đ — Argo CD dev/staging)
 
 - [x] Argo CD app `yas-dev` tồn tại và sync.
-- [ ] Argo CD app `yas-staging` sync ổn định.
-- [ ] Flow release: merge `gitops-yas/main` → `staging` → Argo CD tự sync.
+- [x] Argo CD app `yas-staging` sync ổn định.
+- [x] Flow release: merge `gitops-yas/main` → `staging` → Argo CD tự sync.
 
 ### Nâng cao (2đ — Service Mesh)
 
@@ -81,46 +85,95 @@ GKE cluster (GCP project: yas-devops-project2, zone: us-east1-b)
 | swagger-ui      | ✅ Running       |                                                    |
 | sampledata      | ✅ Running       |                                                    |
 | cart            | ✅ Running       | Đã fix lỗi 403 AuthorizationPolicy khi thêm vào giỏ hàng           |
-| order           | ✅ Running       | Đã fix lỗi code (Jackson `ProductCheckoutListVm`) ở máy local. Chờ push code để tự động build lại |
+| order           | ✅ Running       | Đã fix migration `order.customer_id` để checkout tạo order với Keycloak UUID |
 | product         | ✅ Running       |                                                    |
 | customer        | ✅ Running       |                                                    |
 | inventory       | ✅ Running       |                                                    |
 | media           | ✅ Running       | Đã fix lỗi 403 AuthorizationPolicy để tải hình ảnh                  |
 | tax             | ✅ Running       | Đã fix mTLS & Retry policy (3 lần) thành công                      |
+| payment         | ✅ Running       | Đã deploy service payment, fix Liquibase seed `enabled`, API payment providers OK |
 | storefront-bff  | ✅ Running       | Fix: ExternalName svc `identity` + Keycloak hostname=identity      |
 | backoffice-bff  | ✅ Running       | Fix: ExternalName svc `identity` + Keycloak hostname=identity      |
-| search          | ✅ Running       | Lưu ý: Trống dữ liệu do Kafka Debezium CrashLoopBackOff (sai Image). Service vẫn chạy bình thường. |
+| search          | ✅ Running       | Đã rollback Kafka/Strimzi theo sample, Debezium Ready, search/filter bằng keyword thật chạy được |
 
 ### Repos và jobs
 
 - `thu2005/yas` — CI pipeline chạy được, images push DockerHub.
 - `thu2005/gitops-yas` — GitOps values chuẩn, jenkins-bot commit xác nhận.
 - Jenkins job `developer_build` — chạy thành công.
-- Jenkins job `developer_build_cleanup` — Jenkinsfile sẵn sàng, chưa test.
+- Jenkins job `developer_build_cleanup` — chạy được.
+- Argo CD `yas-dev` — Synced + Healthy.
+- Argo CD `yas-staging` — Synced + Healthy.
+
+### Web demo status
+
+Đã test được các phần sau trên web:
+
+- Storefront mở được qua `http://storefront.yas.local`.
+- Backoffice mở được qua `http://backoffice.yas.local`.
+- Register/login customer mới trên storefront.
+- Search/filter product chạy được.
+- Add to cart chạy được.
+- Checkout chọn địa chỉ chạy được.
+- `PROCESS TO PAYMENT` tạo order thành công, order được ghi vào DB và backoffice thấy order mới.
+
+Trạng thái DB sau khi test checkout:
+
+```text
+order DB:
+- Có order mới, ví dụ email thu@gmail.com
+- status = ACCEPTED
+- payment_status = PENDING
+
+payment DB:
+- Chưa có payment record vì chưa capture PayPal thành công
+```
+
+Ghi chú quan trọng về payment:
+
+- Nếu chọn `COD`, code gốc/sample đang cố ý báo `COD payment feature is under construction`, nên COD không thể success.
+- Nếu chọn `PAYPAL`, app redirect sang PayPal sandbox đúng hướng, nhưng tài khoản test hiện bị PayPal yêu cầu OTP qua số điện thoại. Vì không nhận OTP thật được nên chưa hoàn tất capture, chưa chuyển `payment_status` sang `COMPLETED`.
+- Đây là giới hạn tài khoản PayPal sandbox/demo, không phải lỗi CD/GitOps hay order service.
+
+Các image custom đang dùng cho checkout/payment:
+
+```text
+thu2005/yas-payment:6fb564e1-payment
+thu2005/yas-order:6fb564e1-order-customer-varchar
+```
+
+Source repo `yas` có commit local cần push để source khớp image:
+
+```text
+34550955 fix: align checkout database migrations
+```
+
+GitOps repo đã push commit deploy image order mới:
+
+```text
+209845f fix: deploy order image with customer id migration
+```
 
 ## 4. Việc còn lại
 
-### Mình tự làm (theo thứ tự)
+### Việc còn lại / cần chụp evidence
 
-**1. Lấy IP node GKE và test truy cập YAS từ browser**
+**1. Truy cập YAS từ browser**
 
-```bash
-kubectl get nodes -o wide
-# lấy cột EXTERNAL-IP
-```
+Trạng thái: đã test được qua Istio Gateway.
 
-Thêm vào file `hosts` của máy (Windows: `C:\Windows\System32\drivers\etc\hosts`):
+File `hosts` đang dùng:
 ```text
-<external-ip>  identity.yas.local
-<external-ip>  storefront.yas.local
-<external-ip>  backoffice.yas.local
-<external-ip>  swagger.yas.local
+35.190.132.23  identity.yas.local
+35.190.132.23  storefront.yas.local
+35.190.132.23  backoffice.yas.local
+35.190.132.23  swagger.yas.local
 ```
 
-Truy cập thử qua Istio IngressGateway (cần port HTTP của gateway, ví dụ 80 hoặc NodePort tương ứng):
-- `http://storefront.yas.local` (hoặc kèm port) → storefront
-- `http://backoffice.yas.local` (hoặc kèm port) → backoffice
-- `http://swagger.yas.local` (hoặc kèm port) → swagger-ui
+URL demo:
+- `http://storefront.yas.local` → storefront
+- `http://backoffice.yas.local` → backoffice
+- `http://swagger.yas.local` → swagger-ui
 
 **2. Test Jenkins cleanup job**
 
@@ -128,6 +181,8 @@ Vào Jenkins → `developer_build_cleanup` → Build with Parameters:
 - `RESET_TAX = true`, `DRY_RUN = false`, `CONFIRM = true`
 
 Kiểm tra: `gitops-yas/helm/yas/values-dev.yaml` → `tax.image.tag` phải về `main`.
+
+Trạng thái: đã chạy được. Khi cần evidence, chụp log Jenkins cleanup và diff/tag trong GitOps.
 
 **3. Test staging flow**
 
@@ -144,6 +199,8 @@ kubectl get applications -n argocd
 # yas-staging → Synced + Healthy
 ```
 
+Trạng thái: đã test xong, `yas-staging` Synced + Healthy.
+
 **4. Chụp evidence cho báo cáo**
 
 Xem checklist đầy đủ ở `docs/demo-guide.md`. Những screenshot còn thiếu:
@@ -151,6 +208,10 @@ Xem checklist đầy đủ ở `docs/demo-guide.md`. Những screenshot còn thi
 - `kubectl get applications -n argocd` — Synced + Healthy
 - Truy cập được storefront/backoffice trên browser
 - `kubectl describe pod tax-... | grep Image` — đúng tag `2094d996`
+- Storefront: search/filter, add to cart, checkout tạo order
+- Backoffice: latest orders có order mới
+- DockerHub: image `thu2005/yas-order:6fb564e1-order-customer-varchar`, `thu2005/yas-payment:6fb564e1-payment`
+- Ghi chú payment: PayPal sandbox bị OTP nên chưa capture success
 
 ### Giao cho các bạn khác — Evidence Service Mesh (2đ nâng cao)
 
@@ -169,7 +230,9 @@ Công việc cần làm để quay video/chụp ảnh báo cáo:
 | GKE + Argo CD | ✅ Xong |
 | Infrastructure (PG, Kafka, Redis, ES, Keycloak) | ✅ Xong |
 | 14/14 YAS pods Running | ✅ Xong |
-| Test NodePort, cleanup job, staging flow | Bạn đang làm |
+| Truy cập web qua Istio Gateway | ✅ Xong |
+| Test cleanup job | ✅ Xong |
+| Test staging flow | ✅ Xong |
 | Chụp evidence báo cáo | Bạn đang làm |
 | Istio Service Mesh (AuthPolicy, VirtualService retry) | ✅ Xong |
 | Quay video/chụp Kiali + test curl Istio | Giao bạn khác |
@@ -183,33 +246,46 @@ Công việc cần làm để quay video/chụp ảnh báo cáo:
 
 ## 7. Fix Flow Order & Search
 
-**Nguyên nhân lỗi:** Backoffice không hiển thị Order và Storefront tìm kiếm không ra Product do luồng đồng bộ sự kiện (Kafka/Debezium) bị đứt gãy. Pod `debezium-connect` chết (CrashLoopBackOff) do image `debezium/connect:2.7.3.Final` không tương thích với script khởi động của Strimzi Kafka Operator.
+**Nguyên nhân lỗi:** Storefront search không ra Product do luồng đồng bộ Product -> Kafka/Debezium -> Elasticsearch bị đứt. Trước đó Kafka chart đã bị migrate sang Strimzi mới (`v1`, KRaft/Kafka 4.3.0) và tắt Debezium mặc định, trong khi repo gốc/sample dùng Kafka + ZooKeeper, `apiVersion: kafka.strimzi.io/v1beta2`, và image Debezium gốc.
 
-**Cách xử lý:** Cần build một image Debezium mới tương thích với Strimzi và cập nhật vào cấu hình GitOps.
+**Quyết định:** Không build custom Debezium image nữa. Đưa Kafka chart về giống repo gốc/sample để giảm thay đổi business/infra không cần thiết.
 
-**Bước 1: Tạo Dockerfile chuẩn Strimzi**
-Tại thư mục `yas/debezium` (tạo mới), tạo `Dockerfile`:
-```dockerfile
-FROM quay.io/strimzi/kafka:0.39.0-kafka-3.6.0
-USER root:root
-RUN mkdir -p /opt/kafka/plugins/debezium
-RUN curl -L -o /tmp/debezium.tar.gz https://repo1.maven.org/maven2/io/debezium/debezium-connector-postgres/2.7.3.Final/debezium-connector-postgres-2.7.3.Final-plugin.tar.gz
-RUN tar -xzf /tmp/debezium.tar.gz -C /opt/kafka/plugins/debezium --strip-components=1
-RUN rm /tmp/debezium.tar.gz
-USER 1001
+Các file Kafka chart đã được revert về gốc/sample:
+
+- `k8s/deploy/kafka/kafka-cluster/templates/kafka-cluster.yaml`
+- `k8s/deploy/kafka/kafka-cluster/templates/debezium-connect-cluster.yaml`
+- `k8s/deploy/kafka/kafka-cluster/templates/debezium-connector-postgresql-product-db.yaml`
+- `k8s/deploy/kafka/kafka-cluster/values.yaml`
+
+Strimzi version đã chốt cho GKE:
+
+```text
+Strimzi operator: quay.io/strimzi/operator:0.45.2
+Kafka chart API: kafka.strimzi.io/v1beta2
+Kafka metadata state: ZooKeeper
+Debezium image: ghcr.io/nashtech-garage/debezium-connect-postgresql:latest
 ```
 
-**Bước 2: Build và Push Image lên Docker Hub**
-```bash
-docker build -t thu2005/yas-debezium-connect:latest ./debezium
-docker push thu2005/yas-debezium-connect:latest
+Lý do dùng `0.45.2`:
+
+- `0.44.0` support chart gốc nhưng crash trên GKE hiện tại do Kubernetes API trả field `emulationMajor`.
+- `0.51.0` chạy được trên GKE nhưng không còn support Kafka + ZooKeeper, yêu cầu KafkaNodePool/KRaft.
+- `0.45.2` là bản cao nhất trước khi Strimzi bỏ ZooKeeper, chạy được trên GKE và vẫn support chart gốc/sample.
+
+Trạng thái sau khi rollback:
+
+```text
+namespace kafka:
+- strimzi-cluster-operator: 1/1 Running
+- kafka-cluster-zookeeper-0: 1/1 Running
+- kafka-cluster-kafka-0: 1/1 Running
+- kafka-cluster-entity-operator: 2/2 Running
+- debezium-connect-cluster-connect-0: 1/1 Running
+- kafkaconnector debezium-connector-postgresql-product-db: Ready=True
+
+Elasticsearch:
+- index product co 14 documents
+- search API voi keyword that tra ve product list
 ```
 
-**Bước 3: Cập nhật cấu hình GitOps**
-Trong repo `gitops-yas`, sửa `helm/yas/values-dev.yaml`:
-```yaml
-debeziumConnect:
-  enabled: true
-  image: "thu2005/yas-debezium-connect:latest"
-```
-Commit và push lên nhánh `main`. Argo CD sẽ tự động cập nhật, pod Debezium sẽ khởi động thành công và luồng đồng bộ dữ liệu Kafka sẽ hoạt động trở lại.
+Ghi chú demo: endpoint search gốc khi `keyword` rỗng trả list rỗng vì code gốc/sample dùng `multi_match` với keyword rỗng. Khi test bằng keyword thật, ví dụ `iPhone`, API trả product list bình thường.
