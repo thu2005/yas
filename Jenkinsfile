@@ -56,8 +56,8 @@ pipeline {
         CI_BASE_BRANCH = 'devops-cd'
         DOCKERHUB_NAMESPACE = 'thu2005'
         DOCKERHUB_CREDENTIALS_ID = 'dockerhub-credentials'
-        MAVEN_MODULES = 'backoffice-bff cart customer inventory media order product promotion search storefront-bff tax sampledata'
-        DOCKER_SERVICES = 'backoffice backoffice-bff storefront storefront-bff cart customer inventory media order product promotion search tax sampledata'
+        MAVEN_MODULES = 'backoffice-bff cart customer inventory media order product search storefront-bff tax sampledata'
+        DOCKER_SERVICES = 'backoffice backoffice-bff storefront storefront-bff cart customer inventory media order product search tax sampledata'
     }
 
     stages {
@@ -86,7 +86,7 @@ pipeline {
                         .findAll { it }
 
                     def rebuildAll = params.BUILD_ALL || normalized.any { f ->
-                        f == 'pom.xml' || f.startsWith('checkstyle/')
+                        f == 'pom.xml' || f == 'Jenkinsfile' || f.startsWith('checkstyle/')
                     }
 
                     def affectedMaven = rebuildAll
@@ -163,6 +163,9 @@ pipeline {
                     (env.BRANCH_NAME == 'main' || params.RUN_FEATURE_BRANCH_TESTS)
                 }
             }
+            options {
+                timeout(time: 30, unit: 'MINUTES')
+            }
             steps {
                 sh """
                     mvn ${env.MVN_ARGS} \
@@ -187,7 +190,6 @@ pipeline {
                 expression {
                     env.AFFECTED_DOCKER_MODULES?.trim() &&
                     !env.CHANGE_ID &&
-                    env.BRANCH_NAME != 'main' &&
                     !env.TAG_NAME
                 }
             }
