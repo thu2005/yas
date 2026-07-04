@@ -156,9 +156,83 @@ GitOps repo đã push commit deploy image order mới:
 
 ## 4. Việc còn lại
 
-### Việc còn lại / cần chụp evidence
+File mô tả đề nằm ở `project2.md`. Nhóm đang chia scope như sau:
 
-**1. Truy cập YAS từ browser**
+- **Phần mình phụ trách:** 8 điểm gồm CD bắt buộc 6đ + Argo CD dev/staging nâng cao 2đ.
+- **Phần teammate phụ trách:** service mesh và observability, gồm Istio, Kiali, Grafana, Prometheus.
+
+### Phần mình — CD + Argo CD 8đ
+
+Các chức năng chính đã chạy được. Việc còn lại chủ yếu là chụp evidence, chuẩn hóa báo cáo và đảm bảo source/GitOps đã push đầy đủ.
+
+**A. Source/Git cần hoàn tất**
+
+- [ ] Push branch source `yas/dev_tax_service_test` lên GitHub.
+- [ ] Đảm bảo các commit source sau đã có trên remote:
+  - `34550955 fix: align checkout database migrations`
+  - `9c9aae6f update docs`
+  - `af2f660c fix: restore kafka debezium deployment`
+- [ ] Kiểm tra repo `gitops-yas/main` đã có commit:
+  - `209845f fix: deploy order image with customer id migration`
+- [ ] Không commit các file local/sample nếu không cần cho báo cáo:
+  - `.codex/`
+  - `Jenkinsfile*_sample`
+  - `Jenkinsfile_old`
+  - `project1.md`, `project2.md` nếu đây chỉ là file đề/local note
+
+**B. Evidence CI: branch build image theo commit id**
+
+- [ ] Chụp Jenkins Multibranch/CI job build branch developer, ví dụ `dev_tax_service_test`.
+- [ ] Chụp log CI thể hiện service đổi được build Maven/Docker.
+- [ ] Chụp DockerHub có image tag theo commit id, ví dụ:
+  - `thu2005/yas-tax:<commit>`
+  - `thu2005/yas-order:6fb564e1-order-customer-varchar`
+  - `thu2005/yas-payment:6fb564e1-payment`
+- [ ] Ghi vào báo cáo: tag image dùng commit id 8 ký tự của branch; service không đổi dùng `main` hoặc `latest`.
+
+**C. Evidence CD: Jenkins `developer_build`**
+
+- [ ] Chụp trang `developer_build` có parameters theo từng service branch.
+- [ ] Chụp build log `developer_build` thành công.
+- [ ] Chụp log thể hiện Jenkins resolve branch → commit SHA → update GitOps values.
+- [ ] Chụp commit `jenkins-bot` hoặc commit GitOps do job tạo trong `gitops-yas`.
+- [ ] Chụp `gitops-yas/helm/yas/values-dev.yaml` sau CD, có tag image của service cần test.
+- [ ] Chụp Argo CD `yas-dev` tự sync sau khi GitOps repo đổi.
+
+**D. Evidence cleanup job**
+
+- [ ] Chụp Jenkins job `developer_build_cleanup`.
+- [ ] Chụp Build with Parameters, ví dụ:
+  - `RESET_TAX=true`
+  - `DRY_RUN=false`
+  - `CONFIRM=true`
+- [ ] Chụp cleanup log thành công.
+- [ ] Chụp `values-dev.yaml` sau cleanup, service được reset về `main` hoặc tag default.
+- [ ] Chụp Argo CD sync lại sau cleanup.
+
+**E. Evidence Argo CD dev/staging 2đ**
+
+- [ ] Chụp Argo CD UI có 2 app:
+  - `yas-dev`
+  - `yas-staging`
+- [ ] Chụp CLI:
+  ```bash
+  kubectl get applications -n argocd
+  ```
+  Kỳ vọng: `yas-dev` và `yas-staging` đều `Synced` + `Healthy`.
+- [ ] Chụp `kubectl get pods -n yas-dev` tất cả Running.
+- [ ] Chụp `kubectl get pods -n yas-staging` tất cả Running.
+- [ ] Chụp hoặc ghi log flow release:
+  ```bash
+  cd ~/project2/gitops-yas
+  git checkout staging
+  git merge main
+  git push origin staging
+  kubectl get applications -n argocd
+  ```
+- [ ] Trong báo cáo giải thích: Argo CD thay Jenkins deploy trực tiếp; Jenkins chỉ update GitOps repo, Argo CD reconcile cluster.
+
+**F. Evidence truy cập web/demo YAS**
 
 Trạng thái: đã test được qua Istio Gateway.
 
@@ -175,51 +249,101 @@ URL demo:
 - `http://backoffice.yas.local` → backoffice
 - `http://swagger.yas.local` → swagger-ui
 
-**2. Test Jenkins cleanup job**
+Evidence cần chụp:
 
-Vào Jenkins → `developer_build_cleanup` → Build with Parameters:
-- `RESET_TAX = true`, `DRY_RUN = false`, `CONFIRM = true`
+- [ ] Storefront mở được.
+- [ ] Backoffice mở được.
+- [ ] Search/filter product chạy được.
+- [ ] Add to cart chạy được.
+- [ ] Checkout chọn địa chỉ chạy được.
+- [ ] `PROCESS TO PAYMENT` tạo order thành công.
+- [ ] Backoffice latest orders có order mới.
+- [ ] Ghi chú payment: PayPal sandbox yêu cầu OTP nên chưa capture success; order vẫn tạo thành công với `payment_status=PENDING`.
 
-Kiểm tra: `gitops-yas/helm/yas/values-dev.yaml` → `tax.image.tag` phải về `main`.
+**G. Evidence DB/API khi cần chứng minh checkout**
 
-Trạng thái: đã chạy được. Khi cần evidence, chụp log Jenkins cleanup và diff/tag trong GitOps.
-
-**3. Test staging flow**
+Nếu cần chứng minh order đã tạo, dùng:
 
 ```bash
-cd ~/project2/gitops-yas
-git checkout staging
-git merge main
-git push origin staging
+kubectl exec -n postgres postgresql-0 -- bash -lc \
+  'PGPASSWORD="$PGPASSWORD_SUPERUSER" psql -U postgres -d order -c "select id,email,status,payment_status,checkout_id,created_on from \"order\" order by id desc limit 5;"'
 ```
 
-Argo CD sẽ tự sync `yas-staging`. Kiểm tra:
-```bash
-kubectl get applications -n argocd
-# yas-staging → Synced + Healthy
+Kỳ vọng:
+
+```text
+status = ACCEPTED
+payment_status = PENDING
 ```
 
-Trạng thái: đã test xong, `yas-staging` Synced + Healthy.
+Ghi chú báo cáo:
 
-**4. Chụp evidence cho báo cáo**
+- `COD` trong code gốc/sample đang `under construction`, nên không dùng để demo payment success.
+- `PAYPAL` redirect đúng hướng, nhưng sandbox account hiện bị OTP số điện thoại, nên chưa capture được payment record.
+- Đây không phải lỗi của CD/GitOps.
 
-Xem checklist đầy đủ ở `docs/demo-guide.md`. Những screenshot còn thiếu:
-- `kubectl get pods -n yas-dev` — tất cả Running
-- `kubectl get applications -n argocd` — Synced + Healthy
-- Truy cập được storefront/backoffice trên browser
-- `kubectl describe pod tax-... | grep Image` — đúng tag `2094d996`
-- Storefront: search/filter, add to cart, checkout tạo order
-- Backoffice: latest orders có order mới
-- DockerHub: image `thu2005/yas-order:6fb564e1-order-customer-varchar`, `thu2005/yas-payment:6fb564e1-payment`
-- Ghi chú payment: PayPal sandbox bị OTP nên chưa capture success
+### Phần teammate — Service Mesh + Observability
 
-### Giao cho các bạn khác — Evidence Service Mesh (2đ nâng cao)
+Teammate phụ trách phần nâng cao service mesh và observability. Phần này tách khỏi 8 điểm CD + Argo CD của mình.
 
-Phần Istio đã được cấu hình gần như 100% trong GitOps: mTLS STRICT, Gateway/VirtualService cho web UI, AuthorizationPolicy cho 14 backend services, VirtualService retry/timeout cho tax/product. Xem `docs/team-onboarding.md` để biết cách kết nối vào cluster.
+**A. Istio / Service Mesh**
 
-Công việc cần làm để quay video/chụp ảnh báo cáo:
-1. Cài Kiali, chụp topology screenshot
-2. Test: curl allow/deny/retry, ghi log vào `docs/`
+- [ ] Xác nhận namespace YAS đã bật sidecar injection và pod chạy `2/2`.
+- [ ] Chụp:
+  ```bash
+  kubectl get pods -n yas-dev
+  kubectl get peerauthentication -n yas-dev
+  kubectl get authorizationpolicy -n yas-dev
+  kubectl get virtualservice -n yas-dev
+  kubectl get destinationrule -n yas-dev
+  ```
+- [ ] Evidence mTLS STRICT:
+  - YAML `PeerAuthentication`
+  - screenshot pod `2/2`
+  - nếu có Kiali, bật security badge/traffic mTLS
+- [ ] Evidence AuthorizationPolicy:
+  - curl từ pod được phép → HTTP 200
+  - curl từ pod không được phép → RBAC denied / 403
+- [ ] Evidence retry/timeout:
+  - VirtualService có retry policy cho `tax`/`product`
+  - log hoặc test chứng minh retry xảy ra khi service lỗi tạm thời
+- [ ] Chuẩn bị phần giải thích flow service-to-service: storefront-ui → storefront-bff → product/cart/order/payment/customer/location/media/search.
+
+**B. Kiali**
+
+- [ ] Cài Kiali nếu chưa có.
+- [ ] Chụp topology YAS namespace.
+- [ ] Chụp traffic graph khi thao tác web:
+  - search product
+  - add to cart
+  - checkout tạo order
+- [ ] Chụp edge traffic có mTLS/healthy.
+- [ ] Viết mô tả ngắn cho báo cáo: Kiali dùng để quan sát service topology và traffic trong mesh.
+
+**C. Prometheus / Grafana**
+
+Đề chính CD không bắt buộc observability, nhưng teammate có scope observability nên cần evidence riêng.
+
+- [ ] Xác nhận Prometheus đang scrape metrics:
+  ```bash
+  kubectl get pods -A | grep -E 'prometheus|grafana'
+  kubectl get servicemonitor -A
+  ```
+- [ ] Chụp Prometheus targets hoặc ServiceMonitor liên quan YAS.
+- [ ] Chụp Grafana dashboard:
+  - cluster/pod health
+  - request rate/latency nếu có
+  - JVM/Spring metrics nếu có
+- [ ] Ghi rõ nếu metrics nào chưa hoàn chỉnh để tránh demo quá phạm vi.
+
+**D. Deliverables teammate cần nộp vào docs/**
+
+- [ ] YAML/manifests chính cho Istio hoặc link file trong `gitops-yas`.
+- [ ] Screenshot Kiali topology.
+- [ ] Test plan curl allow/deny/retry.
+- [ ] Log kết quả test.
+- [ ] Screenshot Grafana/Prometheus.
+- [ ] Một đoạn giải thích ngắn: mTLS, AuthorizationPolicy, retry policy, observability dashboard.
 
 ## 5. Phân công
 
@@ -233,9 +357,11 @@ Công việc cần làm để quay video/chụp ảnh báo cáo:
 | Truy cập web qua Istio Gateway | ✅ Xong |
 | Test cleanup job | ✅ Xong |
 | Test staging flow | ✅ Xong |
-| Chụp evidence báo cáo | Bạn đang làm |
-| Istio Service Mesh (AuthPolicy, VirtualService retry) | ✅ Xong |
-| Quay video/chụp Kiali + test curl Istio | Giao bạn khác |
+| Chụp evidence CD + Argo CD 8đ | Bạn làm |
+| Viết phần báo cáo CD + Argo CD | Bạn làm |
+| Istio Service Mesh (mTLS, AuthPolicy, VirtualService retry) | Teammate làm |
+| Kiali topology + curl allow/deny/retry evidence | Teammate làm |
+| Observability Prometheus/Grafana evidence | Teammate làm |
 
 ## 6. Quy tắc
 
