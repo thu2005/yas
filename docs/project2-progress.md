@@ -44,7 +44,7 @@ GKE cluster (GCP project: yas-devops-project2, zone: us-east1-b)
 - [x] Storefront checkout flow tạo order thành công.
 - [x] Backoffice load được dashboard và order mới sau checkout.
 - [ ] Payment PayPal capture success: chưa demo được do PayPal sandbox yêu cầu OTP số điện thoại.
-- [ ] In URL NodePort cho developer test (không ưu tiên nữa vì đang dùng Istio Gateway domain).
+- [x] Cung cấp URL/domain cho developer test qua Istio Gateway + hosts file.
 - [x] Tạo và test Jenkins cleanup job.
 - [ ] Có evidence đầy đủ cho báo cáo.
 
@@ -415,3 +415,436 @@ Elasticsearch:
 ```
 
 Ghi chú demo: endpoint search gốc khi `keyword` rỗng trả list rỗng vì code gốc/sample dùng `multi_match` với keyword rỗng. Khi test bằng keyword thật, ví dụ `iPhone`, API trả product list bình thường.
+
+## 8. Evidence cần chụp
+
+Tất cả screenshot để trong:
+
+```text
+yas/docs/task_screenshot/
+```
+
+Quy ước đặt tên:
+
+- Dùng chữ thường, phân cách bằng `_`.
+- File ảnh dùng `.png`.
+- Không dùng tên có khoảng trắng cho ảnh mới.
+- Nếu ảnh đã có tên cũ hơi sai chính tả thì giữ nguyên để tránh mất link, ảnh mới đặt theo tên chuẩn bên dưới.
+
+### 8.1 Evidence đã có trong `docs/task_screenshot`
+
+Các ảnh web/Argo hiện đã có:
+
+```text
+argocd.png
+argocd_yasdev.png
+argocd_yasstaging.png
+home.png
+Home_items.png
+shopping.png
+item.png
+item (1).png
+item (2).png
+swagger-ui.png
+back_home.png
+back_order.png
+back_payment.png
+back_customer.png
+back_product.png
+back_product_preview.png
+back_cateogies.png
+back_atribute_group.png
+back_product_atribute.png
+back_product_option.png
+back_product_template.png
+home_iventory.png
+```
+
+Các ảnh này đủ dùng để chứng minh web YAS truy cập được qua domain đang chạy:
+
+```text
+http://storefront.yas.local
+http://backoffice.yas.local
+http://swagger.yas.local
+```
+
+File hosts đúng với setup hiện tại:
+
+```text
+35.190.132.23  identity.yas.local
+35.190.132.23  storefront.yas.local
+35.190.132.23  backoffice.yas.local
+35.190.132.23  swagger.yas.local
+```
+
+Không đổi lại NodePort nếu các domain trên đang vào được. Hướng hiện tại là dùng GKE + Istio Gateway + hosts file.
+
+### 8.2 Evidence phần mình: CD + Argo CD 8đ
+
+#### A. Kubernetes và Argo CD
+
+**Task:** Chứng minh cluster và Argo CD đang deploy dev/staging.
+
+Chạy:
+
+```bash
+kubectl get applications -n argocd
+kubectl get pods -n yas-dev
+kubectl get pods -n yas-staging
+```
+
+Output mong muốn:
+
+```text
+yas-dev      Synced   Healthy
+yas-staging  Synced   Healthy
+
+Tất cả pod YAS Running, nếu có Istio sidecar thì READY là 2/2.
+```
+
+Tên file nên lưu:
+
+```text
+argocd_applications_cli.png
+yas_dev_pods.png
+yas_staging_pods.png
+```
+
+Ảnh UI đã có:
+
+```text
+argocd.png
+argocd_yasdev.png
+argocd_yasstaging.png
+```
+
+Nếu ảnh UI cũ chưa rõ trạng thái `Synced` + `Healthy`, chụp lại với tên:
+
+```text
+argocd_apps_synced_healthy.png
+argocd_yas_dev_detail.png
+argocd_yas_staging_detail.png
+```
+
+#### B. CI build image theo commit id
+
+**Task:** Chứng minh branch developer build ra Docker image tag theo commit id.
+
+Evidence cần chụp:
+
+- Jenkins Multibranch/CI job của branch developer, ví dụ `dev_tax_service_test`.
+- Build log có Maven build + Docker build + Docker push.
+- DockerHub có image tag theo commit id.
+
+Tên file nên lưu:
+
+```text
+jenkins_ci_branch_build.png
+jenkins_ci_build_success_log.png
+dockerhub_tax_commit_tag.png
+dockerhub_order_custom_tag.png
+dockerhub_payment_custom_tag.png
+```
+
+Output mong muốn trong log:
+
+```text
+BUILD SUCCESS
+docker build ...
+docker push thu2005/yas-<service>:<commit>
+Finished: SUCCESS
+```
+
+Docker image liên quan checkout/payment đang dùng:
+
+```text
+thu2005/yas-order:6fb564e1-order-customer-varchar
+thu2005/yas-payment:6fb564e1-payment
+```
+
+#### C. CD job `developer_build`
+
+**Task:** Chứng minh developer nhập branch cần test, Jenkins update GitOps repo, Argo CD tự sync.
+
+Evidence cần chụp:
+
+- Jenkins job `developer_build`.
+- Màn hình `Build with Parameters`.
+- Build log thành công.
+- Log có branch → commit SHA → image tag.
+- GitOps commit hoặc `values-dev.yaml` đổi tag.
+- Argo CD `yas-dev` sync sau khi GitOps đổi.
+
+Tên file nên lưu:
+
+```text
+jenkins_developer_build_parameters.png
+jenkins_developer_build_success_log.png
+jenkins_developer_build_gitops_commit.png
+gitops_values_dev_image_tag.png
+argocd_yas_dev_after_developer_build.png
+```
+
+Output mong muốn:
+
+```text
+Resolved branch <branch-name> to commit <sha>
+Updated helm/yas/values-dev.yaml
+git commit ...
+git push origin main
+Finished: SUCCESS
+```
+
+#### D. Cleanup job `developer_build_cleanup`
+
+**Task:** Chứng minh có job xóa/reset deployment test của developer.
+
+Evidence cần chụp:
+
+- Jenkins job `developer_build_cleanup`.
+- Màn hình `Build with Parameters`.
+- Build log thành công.
+- `values-dev.yaml` reset service tag về `main` hoặc tag default.
+- Argo CD sync lại sau cleanup.
+
+Tên file nên lưu:
+
+```text
+jenkins_cleanup_parameters.png
+jenkins_cleanup_success_log.png
+gitops_values_dev_after_cleanup.png
+argocd_yas_dev_after_cleanup.png
+```
+
+Parameter đã test:
+
+```text
+RESET_TAX=true
+DRY_RUN=false
+CONFIRM=true
+```
+
+Output mong muốn:
+
+```text
+Reset tax image tag to main
+git commit ...
+git push origin main
+Finished: SUCCESS
+```
+
+#### E. Argo CD dev/staging flow
+
+**Task:** Chứng minh dùng Argo CD cho dev và staging.
+
+Flow đã test:
+
+```bash
+cd ~/project2/gitops-yas
+git checkout staging
+git merge main
+git push origin staging
+kubectl get applications -n argocd
+```
+
+Tên file nên lưu:
+
+```text
+gitops_merge_main_to_staging.png
+argocd_yas_staging_after_merge.png
+yas_staging_pods_running.png
+```
+
+Output mong muốn:
+
+```text
+yas-staging  Synced  Healthy
+pods trong yas-staging Running
+```
+
+#### F. Web demo YAS
+
+**Task:** Chứng minh app deploy lên GKE dùng được qua browser.
+
+Ảnh đã có thể dùng:
+
+```text
+home.png
+Home_items.png
+shopping.png
+item.png
+item (1).png
+item (2).png
+swagger-ui.png
+back_home.png
+back_order.png
+back_payment.png
+back_customer.png
+back_product.png
+```
+
+Nếu chụp bổ sung, dùng tên chuẩn:
+
+```text
+storefront_home.png
+storefront_product_search.png
+storefront_product_detail.png
+storefront_cart.png
+storefront_checkout_address.png
+storefront_checkout_order_created.png
+backoffice_home_latest_orders.png
+backoffice_orders_detail.png
+swagger_ui_home.png
+```
+
+Kết quả mong muốn:
+
+- Storefront mở được.
+- Search/filter product có kết quả.
+- Add to cart được.
+- Checkout chọn địa chỉ được.
+- `PROCESS TO PAYMENT` tạo order được.
+- Backoffice latest orders hoặc order page thấy order mới.
+
+Ghi chú cho báo cáo:
+
+```text
+Payment PayPal chưa capture success vì PayPal sandbox yêu cầu OTP số điện thoại.
+Order flow vẫn chạy được, order tạo thành công với payment_status=PENDING.
+COD trong code gốc/sample đang under construction nên không dùng để demo payment success.
+```
+
+Nếu cần chứng minh bằng DB:
+
+```bash
+kubectl exec -n postgres postgresql-0 -- bash -lc \
+  'PGPASSWORD="$PGPASSWORD_SUPERUSER" psql -U postgres -d order -c "select id,email,status,payment_status,checkout_id,created_on from \"order\" order by id desc limit 5;"'
+```
+
+Output mong muốn:
+
+```text
+status = ACCEPTED
+payment_status = PENDING
+```
+
+Tên file nên lưu:
+
+```text
+order_db_latest_orders.png
+```
+
+### 8.3 Evidence phần teammate: Service Mesh + Observability
+
+Phần này teammate phụ trách. Vẫn để checklist ở đây để cả nhóm biết cần nộp gì.
+
+#### A. Istio mTLS và sidecar
+
+Chạy:
+
+```bash
+kubectl get pods -n yas-dev
+kubectl get peerauthentication -n yas-dev
+```
+
+Output mong muốn:
+
+```text
+YAS pods READY 2/2
+PeerAuthentication default STRICT
+```
+
+Tên file nên lưu:
+
+```text
+istio_yas_dev_pods_2of2.png
+istio_peerauthentication_strict.png
+```
+
+#### B. AuthorizationPolicy allow/deny
+
+Chạy:
+
+```bash
+kubectl get authorizationpolicy -n yas-dev
+```
+
+Teammate cần test curl từ pod được phép và pod không được phép.
+
+Output mong muốn:
+
+```text
+allowed request -> HTTP 200
+blocked request -> RBAC: access denied / HTTP 403
+```
+
+Tên file nên lưu:
+
+```text
+istio_authorization_policies.png
+istio_curl_allowed.png
+istio_curl_denied.png
+```
+
+#### C. Retry/timeout policy
+
+Chạy:
+
+```bash
+kubectl get virtualservice -n yas-dev
+kubectl describe virtualservice tax-retry -n yas-dev
+kubectl describe virtualservice product-retry -n yas-dev
+```
+
+Output mong muốn:
+
+```text
+VirtualService có retries/attempts/timeout cho tax hoặc product.
+```
+
+Tên file nên lưu:
+
+```text
+istio_virtualservice_retry.png
+istio_retry_test_log.png
+```
+
+#### D. Kiali topology
+
+Tên file nên lưu:
+
+```text
+kiali_yas_topology.png
+kiali_yas_mtls_graph.png
+kiali_yas_traffic_checkout.png
+```
+
+Ảnh cần thấy:
+
+- Các service YAS trong namespace.
+- Traffic giữa UI/BFF/backend.
+- mTLS/healthy edge nếu Kiali hiển thị.
+
+#### E. Prometheus/Grafana
+
+Chạy:
+
+```bash
+kubectl get pods -A | grep -E 'prometheus|grafana'
+kubectl get servicemonitor -A
+```
+
+Tên file nên lưu:
+
+```text
+prometheus_targets.png
+prometheus_servicemonitors.png
+grafana_cluster_dashboard.png
+grafana_yas_service_dashboard.png
+```
+
+Output mong muốn:
+
+- Prometheus/Grafana pods Running.
+- ServiceMonitor tồn tại cho các service cần scrape.
+- Grafana có dashboard cluster hoặc service metrics.
