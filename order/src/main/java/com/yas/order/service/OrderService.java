@@ -133,17 +133,18 @@ public class OrderService {
         cartService.deleteCartItems(orderVm);
         acceptOrder(orderVm.id());
 
-        // update promotion
-        List<PromotionUsageVm> promotionUsageVms = new ArrayList<>();
-        orderItems.forEach(item -> {
-            PromotionUsageVm promotionUsageVm = PromotionUsageVm.builder()
-                    .productId(item.getProductId())
-                    .orderId(order.getId())
-                    .promotionCode(order.getCouponCode())
-                    .build();
-            promotionUsageVms.add(promotionUsageVm);
-        });
-        promotionService.updateUsagePromotion(promotionUsageVms);
+        if (order.getCouponCode() != null && !order.getCouponCode().isBlank()) {
+            List<PromotionUsageVm> promotionUsageVms = new ArrayList<>();
+            orderItems.forEach(item -> {
+                PromotionUsageVm promotionUsageVm = PromotionUsageVm.builder()
+                        .productId(item.getProductId())
+                        .orderId(order.getId())
+                        .promotionCode(order.getCouponCode())
+                        .build();
+                promotionUsageVms.add(promotionUsageVm);
+            });
+            promotionService.updateUsagePromotion(promotionUsageVms);
+        }
         return orderVm;
     }
 
