@@ -220,17 +220,40 @@ pipeline {
                         dockerServices.each { service ->
                             withEnv(["SERVICE_NAME=${service}", "IMAGE_TAG=${imageTag}"]) {
                                   sh '''
+                                      push_image_with_retry() {
+                                          image="$1"
+                                          attempt=1
+                                          max_attempts=5
+
+                                          while [ "$attempt" -le "$max_attempts" ]; do
+                                              echo "Pushing ${image} (attempt ${attempt}/${max_attempts})"
+                                              if docker push "${image}"; then
+                                                  return 0
+                                              fi
+
+                                              if [ "$attempt" -eq "$max_attempts" ]; then
+                                                  echo "Failed to push ${image} after ${max_attempts} attempts"
+                                                  return 1
+                                              fi
+
+                                              sleep_seconds=$((attempt * 20))
+                                              echo "Push failed for ${image}. Retrying in ${sleep_seconds}s..."
+                                              sleep "$sleep_seconds"
+                                              attempt=$((attempt + 1))
+                                          done
+                                      }
+
                                       IMAGE="${DOCKERHUB_NAMESPACE}/yas-${SERVICE_NAME}:${IMAGE_TAG}"
                                       echo "Building ${IMAGE}"
                                       if [ "${SERVICE_NAME}" = "media" ]; then
                                           cp -r sampledata/images media/images
                                       fi
                                       docker build --pull -t "${IMAGE}" "${SERVICE_NAME}"
-                                      docker push "${IMAGE}"
+                                      push_image_with_retry "${IMAGE}"
                                       if [ "${BRANCH_NAME}" = "main" ]; then
                                           MAIN_IMAGE="${DOCKERHUB_NAMESPACE}/yas-${SERVICE_NAME}:main"
                                           docker tag "${IMAGE}" "${MAIN_IMAGE}"
-                                          docker push "${MAIN_IMAGE}"
+                                          push_image_with_retry "${MAIN_IMAGE}"
                                       fi
                                   '''
                             }
