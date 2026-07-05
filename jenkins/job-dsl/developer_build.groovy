@@ -1,23 +1,25 @@
 pipelineJob('developer_build') {
-    description('Deploy a developer test namespace from branch-specific Docker image tags and print NodePort URLs.')
+    description('Update GitOps image tags for YAS dev/staging and let Argo CD deploy the selected service branches.')
     logRotator {
         numToKeep(20)
     }
 
     parameters {
-        stringParam('TAG_CART', 'main', 'Branch name for cart')
-        stringParam('TAG_TAX', 'main', 'Branch name for tax')
-        stringParam('TAG_ORDER', 'main', 'Branch name for order')
-        stringParam('TAG_PRODUCT', 'main', 'Branch name for product')
-        stringParam('TAG_MEDIA', 'main', 'Branch name for media')
-        stringParam('TAG_CUSTOMER', 'main', 'Branch name for customer')
-        stringParam('TAG_INVENTORY', 'main', 'Branch name for inventory')
-        stringParam('TAG_SEARCH', 'main', 'Branch name for search')
-        stringParam('TAG_SAMPLEDATA', 'main', 'Branch name for sampledata')
-        stringParam('TAG_BACKOFFICE_BFF', 'main', 'Branch name for backoffice-bff')
-        stringParam('TAG_STOREFRONT_BFF', 'main', 'Branch name for storefront-bff')
-        stringParam('TAG_BACKOFFICE_UI', 'main', 'Branch name for backoffice-ui')
-        stringParam('TAG_STOREFRONT_UI', 'main', 'Branch name for storefront-ui')
+        choiceParam('TARGET_ENV', ['dev', 'staging'], 'GitOps environment to update')
+        stringParam('PRODUCT_SERVICE_BRANCH', 'main', 'Branch for product-service')
+        stringParam('CART_SERVICE_BRANCH', 'main', 'Branch for cart-service')
+        stringParam('ORDER_SERVICE_BRANCH', 'main', 'Branch for order-service')
+        stringParam('CUSTOMER_SERVICE_BRANCH', 'main', 'Branch for customer-service')
+        stringParam('INVENTORY_SERVICE_BRANCH', 'main', 'Branch for inventory-service')
+        stringParam('TAX_SERVICE_BRANCH', 'main', 'Branch for tax-service')
+        stringParam('MEDIA_SERVICE_BRANCH', 'main', 'Branch for media-service')
+        stringParam('SEARCH_SERVICE_BRANCH', 'main', 'Branch for search-service')
+        stringParam('STOREFRONT_BFF_BRANCH', 'main', 'Branch for storefront-bff')
+        stringParam('STOREFRONT_UI_BRANCH', 'main', 'Branch for storefront-ui')
+        stringParam('BACKOFFICE_BFF_BRANCH', 'main', 'Branch for backoffice-bff')
+        stringParam('BACKOFFICE_UI_BRANCH', 'main', 'Branch for backoffice-ui')
+        stringParam('SAMPLEDATA_BRANCH', 'main', 'Branch for sampledata')
+        booleanParam('DRY_RUN', true, 'Show diff without pushing GitOps commit')
     }
 
     definition {
@@ -25,9 +27,10 @@ pipelineJob('developer_build') {
             scm {
                 git {
                     remote {
-                        url('https://github.com/thu2005/yas.git')
+                        url('https://github.com/thu2005/gitops-yas.git')
+                        credentials('github-credentials')
                     }
-                    branches('*/devops-cd')
+                    branches('*/main')
                     extensions {
                         cloneOptions {
                             shallow(true)
@@ -38,7 +41,7 @@ pipelineJob('developer_build') {
                     }
                 }
             }
-            scriptPath('Jenkinsfile.build')
+            scriptPath('jenkins/Jenkinsfile.developer_build')
             lightweight(true)
         }
     }
