@@ -227,6 +227,11 @@ pipeline {
                                       fi
                                       docker build --pull -t "${IMAGE}" "${SERVICE_NAME}"
                                       docker push "${IMAGE}"
+                                      if [ "${BRANCH_NAME}" = "main" ]; then
+                                          MAIN_IMAGE="${DOCKERHUB_NAMESPACE}/yas-${SERVICE_NAME}:main"
+                                          docker tag "${IMAGE}" "${MAIN_IMAGE}"
+                                          docker push "${MAIN_IMAGE}"
+                                      fi
                                   '''
                             }
                         }
