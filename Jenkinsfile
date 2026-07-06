@@ -56,8 +56,8 @@ pipeline {
         CI_BASE_BRANCH = 'devops-cd'
         DOCKERHUB_NAMESPACE = 'thu2005'
         DOCKERHUB_CREDENTIALS_ID = 'dockerhub-credentials'
-        MAVEN_MODULES = 'backoffice-bff cart customer inventory media order product search storefront-bff tax sampledata'
-        DOCKER_SERVICES = 'backoffice backoffice-bff storefront storefront-bff cart customer inventory media order product search tax sampledata'
+        MAVEN_MODULES = 'backoffice-bff cart customer inventory location media order payment product search storefront-bff tax sampledata'
+        DOCKER_SERVICES = 'backoffice backoffice-bff storefront storefront-bff cart customer inventory location media order payment product search tax sampledata'
     }
 
     stages {
