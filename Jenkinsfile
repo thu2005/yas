@@ -65,6 +65,13 @@ pipeline {
                     if (env.CHANGE_TARGET) {
                         sh "git fetch --no-tags origin ${env.CHANGE_TARGET}"
                     }
+                    if (env.BRANCH_NAME) {
+                        sh '''
+                            if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+                                git fetch --no-tags --deepen=50 origin "$BRANCH_NAME"
+                            fi
+                        '''
+                    }
                 }
             }
         }
