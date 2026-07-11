@@ -2,8 +2,16 @@ username: yasadminuser
 password: admin
 replicas: 1
 postgresqlVersion: "15"
-volumeSize: "10Gi"
+volumeSize: "30Gi"
 maxConnections: "500"
+maxReplicationSlots: "5"
+maxWalSenders: "5"
+maxSlotWalKeepSize: "2GB"
+logicalReplicationSlots:
+  debezium_product:
+    type: logical
+    database: product
+    plugin: pgoutput
 resources:
   requests:
     cpu: 250m
