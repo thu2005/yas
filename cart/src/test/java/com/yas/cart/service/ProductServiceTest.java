@@ -47,6 +47,7 @@ class ProductServiceTest {
             .queryParam("productId", ids)
             .build()
             .toUri();
+            
 
         when(serviceUrlConfig.product()).thenReturn("http://api.yas.local/media");
         when(restClient.get()).thenReturn(requestHeadersUriSpec);
