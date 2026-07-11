@@ -81,7 +81,7 @@ pipeline {
                         .findAll { it }
 
                     def rebuildAll = params.BUILD_ALL || normalized.any { f ->
-                        f == 'pom.xml' || f == 'Jenkinsfile' || f.startsWith('checkstyle/')
+                        f == 'pom.xml' || f.startsWith('checkstyle/')
                     }
 
                     def affectedMaven = rebuildAll
