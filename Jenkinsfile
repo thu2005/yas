@@ -11,8 +11,6 @@ def computeChangedFiles() {
 
     if (env.CHANGE_TARGET) {
         cmd = "git diff --name-only origin/${env.CHANGE_TARGET}...HEAD"
-    } else if (env.BRANCH_NAME && env.BRANCH_NAME != 'main') {
-        cmd = "git diff --name-only origin/${env.CI_BASE_BRANCH}..HEAD"
     } else if (env.GIT_PREVIOUS_SUCCESSFUL_COMMIT && env.GIT_COMMIT) {
         cmd = "git diff --name-only ${env.GIT_PREVIOUS_SUCCESSFUL_COMMIT}..${env.GIT_COMMIT}"
     } else if (env.GIT_PREVIOUS_COMMIT && env.GIT_COMMIT) {
@@ -53,7 +51,6 @@ pipeline {
 
     environment {
         MVN_ARGS = '-B -ntp'
-        CI_BASE_BRANCH = 'devops-cd'
         DOCKERHUB_NAMESPACE = 'thu2005'
         DOCKERHUB_CREDENTIALS_ID = 'dockerhub-credentials'
         MAVEN_MODULES = 'backoffice-bff cart customer inventory location media order payment product search storefront-bff tax sampledata'
@@ -67,8 +64,6 @@ pipeline {
                 script {
                     if (env.CHANGE_TARGET) {
                         sh "git fetch --no-tags origin ${env.CHANGE_TARGET}"
-                    } else if (env.BRANCH_NAME && env.BRANCH_NAME != 'main') {
-                        sh "git fetch --no-tags origin ${env.CI_BASE_BRANCH}:refs/remotes/origin/${env.CI_BASE_BRANCH}"
                     }
                 }
             }
